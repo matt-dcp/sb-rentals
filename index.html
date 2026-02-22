@@ -9,108 +9,133 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg:#0e0f11; --surface:#16181c; --border:#2a2e36;
-    --muted:#7a8399; --text:#e8ecf4; --bright:#f5f7fc;
-    --gold:#d4a84b; --blue:#6ea8d4; --green:#6ecfa0; --red:#d46e6e;
-    --accent:#d4a84b;
-    --mono:'DM Mono',monospace; --serif:'DM Serif Display',serif; --fs:14px;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:var(--fs);line-height:1.65}
+:root{
+  --bg:#0e0f11;--surface:#16181c;--border:#2a2e36;
+  --muted:#7a8399;--text:#e8ecf4;--bright:#f5f7fc;
+  --gold:#d4a84b;--blue:#6ea8d4;--green:#6ecfa0;--red:#d46e6e;
+  --accent:#d4a84b;
+  --mono:'DM Mono',monospace;--serif:'DM Serif Display',serif;--fs:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:var(--fs);line-height:1.65}
 
-  header{border-bottom:1px solid var(--border);padding:24px 36px 20px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-  header h1{font-family:var(--serif);font-size:2rem;color:var(--bright)}
-  #market-label{font-style:italic;color:var(--accent);transition:color 0.2s}
-  .header-meta{color:var(--muted);font-size:12px;text-align:right}
-  .header-meta strong{color:var(--accent)}
+header{border-bottom:1px solid var(--border);padding:24px 36px 20px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+header h1{font-family:var(--serif);font-size:2rem;color:var(--bright)}
+#market-label{font-style:italic;color:var(--accent);transition:color .2s}
+.header-meta{color:var(--muted);font-size:12px;text-align:right}
+.header-meta strong{color:var(--accent)}
 
-  .market-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 36px;background:var(--surface);overflow-x:auto}
-  .tab{padding:11px 20px;font-family:var(--mono);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s;white-space:nowrap}
-  .tab:hover{color:var(--text)}
-  .tab.active{color:var(--bright);border-bottom-color:var(--accent)}
+.market-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 36px;background:var(--surface);overflow-x:auto}
+.tab{padding:11px 20px;font-family:var(--mono);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--bright);border-bottom-color:var(--accent)}
 
-  .data-notes{background:#111316;border-bottom:1px solid var(--border);padding:9px 36px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--muted);line-height:1.5}
-  .note-sep{color:var(--border)}
-  .note-item em{color:#5a6275;font-style:normal}
+.data-notes{background:#111316;border-bottom:1px solid var(--border);padding:9px 36px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--muted);line-height:1.5}
+.note-sep{color:var(--border)}
+.note-item em{color:#5a6275;font-style:normal}
 
-  main{padding:28px 36px;width:100%}
+main{padding:28px 36px;width:100%}
 
-  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px}
-  @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:700px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+.scraper-alert{background:#1c1210;border:1px solid #5a2a20;border-left:3px solid var(--red);padding:14px 20px;color:#e07060;font-size:13px;margin-bottom:18px;display:none;line-height:1.6}
+.scraper-alert strong{color:#f08070}
+.room-rental-note{background:#1a1520;border:1px solid #3a2a40;padding:12px 16px;color:#b08ac0;font-size:12px;margin-bottom:16px;display:none}
 
-  .kpi{background:var(--surface);border:1px solid var(--border);padding:18px 20px;position:relative}
-  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)}
-  .kpi.blue::before{background:var(--blue)}
-  .kpi.green::before{background:var(--green)}
-  .kpi.red::before{background:var(--red)}
-  .kpi-label{color:var(--muted);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;margin-bottom:5px}
-  .kpi-value{font-size:1.75rem;color:var(--bright);font-family:var(--serif);line-height:1.1}
-  .kpi-sub{color:var(--muted);font-size:11px;margin-top:4px}
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px}
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
 
-  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-  .grid-map{display:grid;grid-template-columns:3fr 1fr;gap:16px;margin-bottom:16px}
-  @media(max-width:1000px){.grid-2,.grid-map{grid-template-columns:1fr}}
+.kpi{background:var(--surface);border:1px solid var(--border);padding:18px 20px;position:relative}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)}
+.kpi.blue::before{background:var(--blue)}
+.kpi.green::before{background:var(--green)}
+.kpi.red::before{background:var(--red)}
+.kpi.orange::before{background:#d4944b}
+.kpi-label{color:var(--muted);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;margin-bottom:5px}
+.kpi-value{font-size:1.75rem;color:var(--bright);font-family:var(--serif);line-height:1.1}
+.kpi-sub{color:var(--muted);font-size:11px;margin-top:4px}
 
-  .card{background:var(--surface);border:1px solid var(--border);padding:22px}
-  .card-title{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;padding-bottom:11px;border-bottom:1px solid var(--border)}
-  .card-title span{color:var(--accent)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-map{display:grid;grid-template-columns:3fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:1100px){.grid-3{grid-template-columns:1fr 1fr}}
+@media(max-width:1000px){.grid-2,.grid-map{grid-template-columns:1fr}}
+@media(max-width:700px){.grid-3{grid-template-columns:1fr}}
 
-  #map{height:380px;background:#0a0b0d}
-  .leaflet-container{background:#111317 !important;font-family:var(--mono) !important}
-  .map-legend{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted);align-items:center;flex-wrap:wrap}
-  .legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.card{background:var(--surface);border:1px solid var(--border);padding:22px}
+.card-title{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;padding-bottom:11px;border-bottom:1px solid var(--border)}
+.card-title span{color:var(--accent)}
 
-  .br-table{width:100%;border-collapse:collapse;font-size:13px}
-  .br-table th{text-align:right;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border)}
-  .br-table th:first-child{text-align:left}
-  .br-table td{padding:10px 12px;border-bottom:1px solid #1e2128;text-align:right}
-  .br-table td:first-child{text-align:left;color:var(--bright);font-size:14px}
-  .br-table tr:last-child td{border-bottom:none}
-  .br-table tr:hover td{background:#1c1f26}
-  .median-val{color:var(--accent);font-weight:500}
-  .range-val{color:var(--muted);font-size:12px}
-  .count-val{color:var(--muted);font-size:12px}
+#map{height:380px;background:#0a0b0d}
+.leaflet-container{background:#111317!important;font-family:var(--mono)!important}
+.map-legend{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted);align-items:center;flex-wrap:wrap}
+.legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
 
-  .hood-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
-  .hood-name{min-width:120px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hood-bar-wrap{flex:1;background:var(--bg);height:5px}
-  .hood-bar{height:5px;background:var(--accent);transition:width 0.5s ease}
-  .hood-count{min-width:28px;text-align:right;color:var(--muted);font-size:11px}
-  .hood-price{min-width:70px;text-align:right;color:var(--accent);font-size:12px}
+.br-table{width:100%;border-collapse:collapse;font-size:13px}
+.br-table th{text-align:right;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--border)}
+.br-table th:first-child{text-align:left}
+.br-table td{padding:9px 10px;border-bottom:1px solid #1e2128;text-align:right}
+.br-table td:first-child{text-align:left;color:var(--bright)}
+.br-table tr:last-child td{border-bottom:none}
+.br-table tr:hover td{background:#1c1f26}
+.median-val{color:var(--accent);font-weight:500}
+.muted-val{color:var(--muted);font-size:12px}
+.dom-good{color:var(--green);font-weight:500}
+.dom-mid{color:var(--gold);font-weight:500}
+.dom-slow{color:var(--red);font-weight:500}
 
-  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
-  .filters label{color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
-  select,input[type=number]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 10px;outline:none}
-  select:focus,input:focus{border-color:var(--accent)}
-  .btn{background:var(--accent);color:#0e0f11;border:none;font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:1px;padding:7px 16px;cursor:pointer;text-transform:uppercase}
-  .btn:hover{opacity:0.85}
+.absorption-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1e2128;font-size:13px}
+.absorption-row:last-child{border-bottom:none}
+.absorption-label{color:var(--text);min-width:70px}
+.absorption-bar-wrap{flex:1;margin:0 12px;background:var(--bg);height:6px;position:relative}
+.absorption-bar-new{height:6px;background:var(--green);position:absolute;left:0;top:0}
+.absorption-bar-rem{height:6px;background:var(--red);position:absolute;left:0;top:0;opacity:.6}
+.absorption-ratio{font-weight:500;min-width:50px;text-align:right}
+.ratio-tight{color:var(--green)}
+.ratio-loose{color:var(--red)}
+.ratio-bal{color:var(--muted)}
 
-  .table-wrap{overflow-x:auto}
-  table.listings{width:100%;border-collapse:collapse;font-size:13px}
-  table.listings th{text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
-  table.listings td{padding:9px 12px;border-bottom:1px solid #1e2128;vertical-align:top}
-  table.listings tr:hover td{background:#1c1f26}
-  .price-cell{color:var(--accent);font-weight:500}
-  .cat-badge{display:inline-block;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border:1px solid var(--border);color:var(--muted)}
-  .cat-badge.apartments{border-color:var(--blue);color:var(--blue)}
-  .cat-badge.houses{border-color:var(--green);color:var(--green)}
-  .cat-badge.room_rental{border-color:#a06eb0;color:#a06eb0}
-  a{color:var(--accent);text-decoration:none}
-  a:hover{text-decoration:underline}
-  .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:280px}
-  .no-data{color:var(--muted);padding:20px;font-size:13px}
-  .room-rental-note{background:#1a1520;border:1px solid #3a2a40;padding:12px 16px;color:#b08ac0;font-size:12px;margin-bottom:16px;display:none}
-  .scraper-alert{background:#1c1210;border:1px solid #5a2a20;border-left:3px solid var(--red);padding:14px 20px;color:#e07060;font-size:13px;margin-bottom:18px;display:none;line-height:1.6}
-  .scraper-alert strong{color:#f08070}
+.hood-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+.hood-name{min-width:120px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hood-bar-wrap{flex:1;background:var(--bg);height:5px}
+.hood-bar{height:5px;background:var(--accent)}
+.hood-count{min-width:28px;text-align:right;color:var(--muted);font-size:11px}
+.hood-price{min-width:70px;text-align:right;color:var(--accent);font-size:12px}
+
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filters label{color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+select,input[type=number]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 10px;outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+.btn{background:var(--accent);color:#0e0f11;border:none;font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:1px;padding:7px 16px;cursor:pointer;text-transform:uppercase}
+.btn:hover{opacity:.85}
+.btn.secondary{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn.secondary:hover{border-color:var(--accent);color:var(--accent)}
+
+.table-wrap{overflow-x:auto}
+table.listings{width:100%;border-collapse:collapse;font-size:13px}
+table.listings th{text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+table.listings th:hover{color:var(--text)}
+table.listings th.sorted{color:var(--accent)}
+table.listings td{padding:9px 12px;border-bottom:1px solid #1e2128;vertical-align:top}
+table.listings tr:hover td{background:#1c1f26}
+.price-cell{color:var(--accent);font-weight:500}
+.ppsf-cell{color:var(--blue);font-size:12px}
+.cat-badge{display:inline-block;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border:1px solid var(--border);color:var(--muted)}
+.cat-badge.apartments{border-color:var(--blue);color:var(--blue)}
+.cat-badge.houses{border-color:var(--green);color:var(--green)}
+.cat-badge.room_rental{border-color:#a06eb0;color:#a06eb0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:260px}
+.no-data{color:var(--muted);padding:20px;font-size:13px}
+.section-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:28px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.data-age-note{font-size:11px;color:var(--muted);margin-top:10px;font-style:italic}
 </style>
 </head>
 <body>
 
 <script>
-  const SUPABASE_URL = 'https://wzlccltlthlaguazgten.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGNjbHRsdGhsYWd1YXpndGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc4ODMsImV4cCI6MjA4NzM1Mzg4M30.5KuGMYwAYGiK0UYDcHxgIjXAHd-s_v6gutigVIH_zZM';
+const SUPABASE_URL='https://wzlccltlthlaguazgten.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGNjbHRsdGhsYWd1YXpndGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc4ODMsImV4cCI6MjA4NzM1Mzg4M30.5KuGMYwAYGiK0UYDcHxgIjXAHd-s_v6gutigVIH_zZM';
 </script>
 
 <header>
@@ -133,120 +158,184 @@
 </div>
 
 <div class="data-notes">
-  <span class="note-item">Source: Craigslist (<em>apa</em> + <em>hhh</em> categories), scraped daily at 8am PST</span>
+  <span class="note-item">Source: Craigslist (<em>apa</em>+<em>hhh</em>), scraped daily 8am PST</span>
   <span class="note-sep">·</span>
-  <span class="note-item">Excludes: unpriced listings, commercial/office space, storage, housing-wanted ads, scam alerts</span>
+  <span class="note-item">Excludes: unpriced, commercial, storage, wanted ads, scam alerts, room rentals (from stats)</span>
   <span class="note-sep">·</span>
-  <span class="note-item">Stats exclude room rentals — browse table includes them</span>
+  <span class="note-item">Asking prices only — not confirmed lease rates</span>
   <span class="note-sep">·</span>
-  <span class="note-item">Neighborhood tabs use Craigslist location field; multi-city listings stay in Santa Barbara</span>
+  <span class="note-item">Multi-city listings remain in Santa Barbara tab</span>
 </div>
 
 <main>
-  <div id="scraper-alert" class="scraper-alert"></div>
+<div id="scraper-alert" class="scraper-alert"></div>
+<div id="room-rental-note" class="room-rental-note">Room rentals are visible in the browse table but excluded from all stats above.</div>
 
-  <div id="room-rental-note" class="room-rental-note">
-    Room rentals (single rooms in shared homes) are visible in the table below but excluded from all stats, averages, and charts above.
-  </div>
+<!-- KPIs -->
+<div class="kpi-row">
+  <div class="kpi">        <div class="kpi-label">Active Listings</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">excl. room rentals</div></div>
+  <div class="kpi blue">  <div class="kpi-label">Overall Median</div><div class="kpi-value" id="kpi-avg">—</div>  <div class="kpi-sub">asking price</div></div>
+  <div class="kpi">        <div class="kpi-label">Apts Median</div>   <div class="kpi-value" id="kpi-apt">—</div>  <div class="kpi-sub">apartments</div></div>
+  <div class="kpi green"> <div class="kpi-label">Houses Median</div> <div class="kpi-value" id="kpi-house">—</div><div class="kpi-sub">houses</div></div>
+  <div class="kpi orange"><div class="kpi-label">Avg Days Listed</div><div class="kpi-value" id="kpi-dom">—</div> <div class="kpi-sub">active listings</div></div>
+</div>
 
-  <div class="kpi-row">
-    <div class="kpi">          <div class="kpi-label">Total Listings</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">excl. room rentals</div></div>
-    <div class="kpi blue">    <div class="kpi-label">Overall Avg</div>  <div class="kpi-value" id="kpi-avg">—</div>  <div class="kpi-sub">all types</div></div>
-    <div class="kpi">          <div class="kpi-label">Apts Avg</div>     <div class="kpi-value" id="kpi-apt">—</div>  <div class="kpi-sub">apartments</div></div>
-    <div class="kpi green">   <div class="kpi-label">Houses Avg</div>   <div class="kpi-value" id="kpi-house">—</div><div class="kpi-sub">houses</div></div>
-    <div class="kpi red">     <div class="kpi-label">Days Tracked</div> <div class="kpi-value" id="kpi-days">—</div> <div class="kpi-sub">history</div></div>
-  </div>
-
-  <div class="grid-map">
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:16px 20px 12px;border-bottom:1px solid var(--border)">
-        <div class="card-title" style="margin:0;border:none;padding:0">Neighborhood Map</div>
-      </div>
-      <div id="map"></div>
-      <div class="map-legend" style="padding:10px 18px">
-        <span><span class="legend-dot" id="legend-dot" style="background:var(--gold)"></span><span id="legend-label">Santa Barbara</span></span>
-        <span style="font-size:11px">Circle size = listing count · Click for details</span>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Top Neighborhoods</div>
-      <div id="hood-list" style="color:var(--muted);font-size:13px">Loading…</div>
+<!-- Map + Neighborhoods -->
+<div class="grid-map">
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px 12px;border-bottom:1px solid var(--border)"><div class="card-title" style="margin:0;border:none;padding:0">Neighborhood Map</div></div>
+    <div id="map"></div>
+    <div class="map-legend" style="padding:10px 18px">
+      <span><span class="legend-dot" id="legend-dot" style="background:var(--gold)"></span><span id="legend-label">Santa Barbara</span></span>
+      <span style="font-size:11px">Circle size = listing count · Click for details</span>
     </div>
   </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Rent by Bedroom Count <span>median · avg · min · max</span></div>
-      <table class="br-table">
-        <thead><tr><th>Type</th><th>Median</th><th>Avg</th><th>Min</th><th>Max</th><th>#</th></tr></thead>
-        <tbody id="br-tbody"><tr><td colspan="6" class="no-data">Loading…</td></tr></tbody>
-      </table>
-    </div>
-    <div class="card">
-      <div class="card-title">Price Distribution</div>
-      <div style="position:relative;height:260px"><canvas id="chart-dist"></canvas></div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">New Listings Per Day <span>last 30 days</span></div>
-    <div style="position:relative;height:180px"><canvas id="chart-time"></canvas></div>
-  </div>
-
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">Listing Mix by Bedroom Count <span>current 30 days vs prior 30 days · excludes room rentals</span></div>
-    <div style="position:relative;height:240px"><canvas id="chart-brmix"></canvas></div>
-  </div>
-
   <div class="card">
-    <div class="card-title">Browse Listings</div>
-    <div class="filters">
-      <label>Type</label>
-      <select id="f-cat">
-        <option value="all">All</option>
-        <option value="apartments">Apartments</option>
-        <option value="houses">Houses</option>
-        <option value="room_rental">Room Rentals</option>
-      </select>
-      <label>Beds</label>
-      <select id="f-beds">
-        <option value="all">Any</option>
-        <option value="0">Studio</option>
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4+</option>
-      </select>
-      <label>Min $</label>
-      <input type="number" id="f-min" value="0" step="100" style="width:88px">
-      <label>Max $</label>
-      <input type="number" id="f-max" value="20000" step="100" style="width:88px">
-      <button class="btn" onclick="loadListings()">Filter</button>
-    </div>
-    <div class="table-wrap">
-      <table class="listings">
-        <thead><tr><th>Title</th><th>Type</th><th>Price/mo</th><th>Beds</th><th>Baths</th><th>Sqft</th><th>Neighborhood</th><th>Posted</th></tr></thead>
-        <tbody id="listings-body"><tr><td colspan="8" class="no-data">Loading…</td></tr></tbody>
-      </table>
-    </div>
+    <div class="card-title">Top Neighborhoods</div>
+    <div id="hood-list" style="color:var(--muted);font-size:13px">Loading…</div>
   </div>
+</div>
+
+<!-- Pricing + Velocity tables -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Rent by Bedroom Count <span>median · avg · min · max</span></div>
+    <table class="br-table">
+      <thead><tr><th>Type</th><th>Median</th><th>Avg</th><th>Min</th><th>Max</th><th>#</th></tr></thead>
+      <tbody id="br-tbody"><tr><td colspan="6" class="no-data">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-title">Days on Market <span>avg active DOM · &lt;7 fast · 7–14 normal · 14+ slow</span></div>
+    <table class="br-table">
+      <thead><tr><th>Type</th><th>Avg DOM</th><th>Fastest</th><th>Slowest</th><th>#</th></tr></thead>
+      <tbody id="dom-tbody"><tr><td colspan="5" class="no-data">Loading…</td></tr></tbody>
+    </table>
+    <div class="data-age-note" id="dom-note"></div>
+  </div>
+</div>
+
+<!-- Absorption + Price Distribution -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Absorption Rate <span>new listings vs removed · ratio &gt;1 = tightening</span></div>
+    <div id="absorption-list"><div class="no-data">Loading…</div></div>
+    <div class="data-age-note" id="absorption-note"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Price Distribution <span>active listings</span></div>
+    <div style="position:relative;height:240px"><canvas id="chart-dist"></canvas></div>
+  </div>
+</div>
+
+<!-- Price Trend -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">
+    Median Price Trend <span>90-day rolling · by bedroom count</span>
+    <span style="float:right;font-size:11px;color:var(--muted)">
+      <label style="margin-right:12px"><input type="checkbox" id="trend-studio" checked onchange="rebuildTrend()"> Studio</label>
+      <label style="margin-right:12px"><input type="checkbox" id="trend-1br" checked onchange="rebuildTrend()"> 1BR</label>
+      <label style="margin-right:12px"><input type="checkbox" id="trend-2br" checked onchange="rebuildTrend()"> 2BR</label>
+      <label style="margin-right:12px"><input type="checkbox" id="trend-3br" checked onchange="rebuildTrend()"> 3BR</label>
+      <label><input type="checkbox" id="trend-4br" onchange="rebuildTrend()"> 4BR+</label>
+    </span>
+  </div>
+  <div style="position:relative;height:260px"><canvas id="chart-trend"></canvas></div>
+  <div class="data-age-note" id="trend-note"></div>
+</div>
+
+<!-- Bedroom Mix Comparison -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">Listing Mix by Bedroom Count <span>current 30 days vs prior 30 days</span></div>
+  <div style="position:relative;height:220px"><canvas id="chart-brmix"></canvas></div>
+</div>
+
+<!-- New Listings Per Day -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">New Listings Per Day <span>last 30 days</span></div>
+  <div style="position:relative;height:160px"><canvas id="chart-time"></canvas></div>
+</div>
+
+<!-- Comps Tool -->
+<div class="card">
+  <div class="card-title">Comp Finder <span>filter · sort by $/sqft when available</span></div>
+  <div class="filters">
+    <label>Type</label>
+    <select id="f-cat">
+      <option value="all">All</option>
+      <option value="apartments">Apartments</option>
+      <option value="houses">Houses</option>
+      <option value="room_rental">Room Rentals</option>
+    </select>
+    <label>Beds</label>
+    <select id="f-beds">
+      <option value="all">Any</option>
+      <option value="0">Studio</option>
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4+</option>
+    </select>
+    <label>Baths</label>
+    <select id="f-baths">
+      <option value="all">Any</option>
+      <option value="1">1</option>
+      <option value="1.5">1.5</option>
+      <option value="2">2</option>
+      <option value="2.5">2.5</option>
+      <option value="3">3+</option>
+    </select>
+    <label>Hood</label>
+    <select id="f-hood"><option value="all">Any</option></select>
+    <label>Min $</label>
+    <input type="number" id="f-min" value="0" step="100" style="width:80px">
+    <label>Max $</label>
+    <input type="number" id="f-max" value="20000" step="100" style="width:80px">
+    <label>Min sqft</label>
+    <input type="number" id="f-sqft" value="0" step="50" style="width:80px">
+    <button class="btn" onclick="loadListings()">Search</button>
+    <button class="btn secondary" onclick="resetFilters()">Reset</button>
+  </div>
+  <div id="comps-summary" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+  <div class="table-wrap">
+    <table class="listings">
+      <thead>
+        <tr>
+          <th onclick="sortListings('title')">Title</th>
+          <th onclick="sortListings('category')">Type</th>
+          <th onclick="sortListings('price')" class="sorted">Price/mo ↓</th>
+          <th onclick="sortListings('ppsf')">$/sqft</th>
+          <th onclick="sortListings('bedrooms')">Beds</th>
+          <th onclick="sortListings('bathrooms')">Baths</th>
+          <th onclick="sortListings('sqft')">Sqft</th>
+          <th onclick="sortListings('neighborhood')">Neighborhood</th>
+          <th onclick="sortListings('dom')">DOM</th>
+          <th onclick="sortListings('posted_date')">Listed</th>
+        </tr>
+      </thead>
+      <tbody id="listings-body"><tr><td colspan="10" class="no-data">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
 </main>
 
 <script>
-Chart.defaults.color='#7a8399';Chart.defaults.borderColor='#2a2e36';
-Chart.defaults.font.family="'DM Mono',monospace";Chart.defaults.font.size=12;
+Chart.defaults.color='#7a8399';
+Chart.defaults.borderColor='#2a2e36';
+Chart.defaults.font.family="'DM Mono',monospace";
+Chart.defaults.font.size=12;
 
 const MARKETS={
-  santa_barbara:{label:'Santa Barbara', color:'#d4a84b'},
-  isla_vista:   {label:'Isla Vista',    color:'#6ea8d4'},
-  goleta:       {label:'Goleta',        color:'#7dcfa8'},
-  carpinteria:  {label:'Carpinteria',   color:'#d4836e'},
-  solvang:      {label:'Solvang',       color:'#a8b86e'},
-  buellton:     {label:'Buellton',      color:'#b8a06e'},
-  lompoc:       {label:'Lompoc',        color:'#8e8eb8'},
-  ojai:         {label:'Ojai',          color:'#6ecfa0'},
+  santa_barbara:{label:'Santa Barbara',color:'#d4a84b'},
+  isla_vista:   {label:'Isla Vista',   color:'#6ea8d4'},
+  goleta:       {label:'Goleta',       color:'#7dcfa8'},
+  carpinteria:  {label:'Carpinteria',  color:'#d4836e'},
+  solvang:      {label:'Solvang',      color:'#a8b86e'},
+  buellton:     {label:'Buellton',     color:'#b8a06e'},
+  lompoc:       {label:'Lompoc',       color:'#8e8eb8'},
+  ojai:         {label:'Ojai',         color:'#6ecfa0'},
 };
-
 const MAP_CENTERS={
   santa_barbara:{center:[34.421,-119.698],zoom:12},
   isla_vista:   {center:[34.414,-119.860],zoom:14},
@@ -257,7 +346,6 @@ const MAP_CENTERS={
   lompoc:       {center:[34.639,-120.457],zoom:12},
   ojai:         {center:[34.448,-119.243],zoom:12},
 };
-
 const HOOD_COORDS={
   'downtown':[34.4208,-119.6982],'state street':[34.4230,-119.7020],
   'eastside':[34.4183,-119.6850],'westside':[34.4250,-119.7180],
@@ -277,33 +365,48 @@ const HOOD_COORDS={
 let currentMarket='santa_barbara';
 let charts={};
 let leafletMap,markerLayer;
+let listingsCache=[];
+let sortField='price';
+let sortDir=-1; // -1=desc, 1=asc
+let trendDataCache=null;
 
-function coordsFor(name){
-  if(!name) return null;
-  const k=name.toLowerCase().trim();
+function coordsFor(n){
+  if(!n) return null;
+  const k=n.toLowerCase().trim();
   if(HOOD_COORDS[k]) return HOOD_COORDS[k];
-  const cfg=MAP_CENTERS[currentMarket];
-  return [cfg.center[0]+(Math.random()-.5)*.02,cfg.center[1]+(Math.random()-.5)*.02];
+  const c=MAP_CENTERS[currentMarket];
+  return[c.center[0]+(Math.random()-.5)*.02,c.center[1]+(Math.random()-.5)*.02];
 }
 function fmt$(v){return v!=null?'$'+Number(v).toLocaleString():'—'}
+function fmtDom(d){
+  if(d==null||d===''||isNaN(d)) return'—';
+  const cls=d<=7?'dom-good':d<=14?'dom-mid':'dom-slow';
+  return`<span class="${cls}">${Math.round(d)}d</span>`;
+}
 function median(arr){
   if(!arr.length) return null;
-  const s=[...arr].sort((a,b)=>a-b);
-  const m=Math.floor(s.length/2);
+  const s=[...arr].sort((a,b)=>a-b),m=Math.floor(s.length/2);
   return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);
 }
+function daysBetween(a,b){
+  try{return Math.round((new Date(b)-new Date(a))/(86400000));}
+  catch{return null;}
+}
 
-async function sbFetch(params,extraFilters=[]){
-  const url=new URL(`${SUPABASE_URL}/rest/v1/listings`);
-  Object.entries(params).forEach(([k,v])=>url.searchParams.append(k,v));
-  extraFilters.forEach(f=>{const[k,v]=f.split(/=(.*)/s);url.searchParams.append(k,v)});
+async function sbFetch(path,params={}){
+  const url=new URL(`${SUPABASE_URL}/rest/v1/${path}`);
+  Object.entries(params).forEach(([k,v])=>{
+    if(Array.isArray(v)) v.forEach(x=>url.searchParams.append(k,x));
+    else url.searchParams.append(k,v);
+  });
   const res=await fetch(url,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
-  if(!res.ok) throw new Error(`Supabase ${res.status}`);
+  if(!res.ok) throw new Error(`Supabase ${res.status} on ${path}`);
   return res.json();
 }
 
 function setMarket(market,btn){
   currentMarket=market;
+  trendDataCache=null;
   const cfg=MARKETS[market];
   document.documentElement.style.setProperty('--accent',cfg.color);
   document.getElementById('market-label').textContent=cfg.label;
@@ -316,129 +419,261 @@ function setMarket(market,btn){
 }
 
 async function loadAll(){
-  await Promise.all([loadSummary(),loadNeighborhoods(),loadListings()]);
+  await Promise.all([loadSummary(),loadNeighborhoods(),loadListings(),loadSnapshots()]);
 }
 
+// ── Summary: KPIs, pricing table, DOM table, charts ──────────────────────
 async function loadSummary(){
-  const rows=await sbFetch({
-    select:'price,category,bedrooms,scraped_at',
+  const today=new Date().toISOString().slice(0,10);
+  const rows=await sbFetch('listings',{
+    select:'price,category,bedrooms,scraped_at,first_seen,last_seen',
     market:`eq.${currentMarket}`,
     limit:'10000',
     order:'scraped_at.desc',
   });
 
-  // ── Scraper health check ──────────────────────────────────────────────
+  // Health check
   const alertEl=document.getElementById('scraper-alert');
-  const mostRecent=rows[0]?.scraped_at;
-  if(!rows.length||!mostRecent){
+  if(!rows.length){
     alertEl.style.display='block';
-    alertEl.innerHTML='<strong>⚠ No data available for this market.</strong> The scraper may not have run yet, or this market has no listings.';
+    alertEl.innerHTML='<strong>⚠ No data for this market.</strong> Scraper may not have run yet.';
   } else {
-    const hoursSince=(Date.now()-new Date(mostRecent))/(1000*60*60);
-    const lastDate=mostRecent.slice(0,10);
-    // Count how many new listings came in on the most recent scrape date
-    const lastDayCount=rows.filter(r=>r.scraped_at?.slice(0,10)===lastDate).length;
-    // Get the typical daily count from prior 7 scrape days for comparison
+    const mostRecent=rows[0].scraped_at;
+    const hoursSince=(Date.now()-new Date(mostRecent))/(3600000);
     const byday={};
     rows.forEach(r=>{const d=r.scraped_at?.slice(0,10);if(d)byday[d]=(byday[d]||0)+1});
-    const priorDays=Object.entries(byday).sort((a,b)=>a[0]<b[0]?1:-1).slice(1,8);
-    const typicalCount=priorDays.length?Math.round(priorDays.reduce((s,[,n])=>s+n,0)/priorDays.length):null;
-
+    const prior7=Object.entries(byday).sort((a,b)=>a[0]<b[0]?1:-1).slice(1,8);
+    const typical=prior7.length?Math.round(prior7.reduce((s,[,n])=>s+n,0)/prior7.length):null;
+    const todayCount=byday[mostRecent?.slice(0,10)]||0;
     if(hoursSince>25){
       alertEl.style.display='block';
-      alertEl.innerHTML=`<strong>⚠ Scraper may be broken.</strong> Last data received <strong>${Math.round(hoursSince)} hours ago</strong> (${lastDate}). Expected daily at 8am PST. Check GitHub Actions for errors.`;
-    } else if(typicalCount && lastDayCount < typicalCount * 0.3){
+      alertEl.innerHTML=`<strong>⚠ Scraper may be broken.</strong> Last data: <strong>${Math.round(hoursSince)}h ago</strong>. Check <a href="https://github.com/matt-dcp/sb-rentals/actions" target="_blank" style="color:var(--red)">GitHub Actions</a>.`;
+    } else if(typical&&todayCount<typical*0.3){
       alertEl.style.display='block';
-      alertEl.innerHTML=`<strong>⚠ Unusually low listing count today.</strong> Got <strong>${lastDayCount}</strong> listings vs typical <strong>${typicalCount}</strong>. Craigslist HTML may have changed. Check GitHub Actions.`;
+      alertEl.innerHTML=`<strong>⚠ Unusually low listing count today</strong> (${todayCount} vs typical ${typical}). Craigslist structure may have changed. Check <a href="https://github.com/matt-dcp/sb-rentals/actions" target="_blank" style="color:var(--red)">GitHub Actions</a>.`;
     } else {
       alertEl.style.display='none';
     }
   }
 
-  if(!rows.length){
-    document.getElementById('header-meta').textContent='No data yet for this market';
-    ['kpi-total','kpi-avg','kpi-apt','kpi-house','kpi-days'].forEach(id=>document.getElementById(id).textContent='—');
-    document.getElementById('br-tbody').innerHTML='<tr><td colspan="6" class="no-data">No data</td></tr>';
-    return;
-  }
+  if(!rows.length) return;
 
   const last=rows[0].scraped_at?.slice(0,19).replace('T',' ')||'—';
   document.getElementById('header-meta').innerHTML=`Last scraped: <strong>${last}</strong> UTC`;
 
-  // Separate room rentals from real listings for stats
   const real=rows.filter(r=>r.category!=='room_rental'&&r.price>=500&&r.price<=20000);
   const roomCount=rows.filter(r=>r.category==='room_rental').length;
-  const days=new Set(rows.map(r=>r.scraped_at?.slice(0,10))).size;
-
   document.getElementById('room-rental-note').style.display=roomCount?'block':'none';
+
+  const prices=real.map(r=>r.price);
   document.getElementById('kpi-total').textContent=real.length.toLocaleString();
-  document.getElementById('kpi-days').textContent=days;
+  document.getElementById('kpi-avg').textContent=fmt$(median(prices));
+  document.getElementById('kpi-apt').textContent=fmt$(median(real.filter(r=>r.category==='apartments').map(r=>r.price)));
+  document.getElementById('kpi-house').textContent=fmt$(median(real.filter(r=>r.category==='houses').map(r=>r.price)));
 
-  const avg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.price,0)/arr.length):null;
-  document.getElementById('kpi-avg').textContent=fmt$(avg(real));
-  document.getElementById('kpi-apt').textContent=fmt$(avg(real.filter(r=>r.category==='apartments')));
-  document.getElementById('kpi-house').textContent=fmt$(avg(real.filter(r=>r.category==='houses')));
+  // DOM for active listings using first_seen
+  const withDom=real.filter(r=>r.first_seen);
+  const doms=withDom.map(r=>daysBetween(r.first_seen,today)).filter(d=>d!=null&&d>=0);
+  const avgDom=doms.length?Math.round(doms.reduce((s,x)=>s+x,0)/doms.length):null;
+  document.getElementById('kpi-dom').textContent=avgDom!=null?avgDom+'d':'—';
 
-  // Bedroom table (real listings only)
+  // Bedroom pricing table
   const BR=[
-    {label:'Studio', f:r=>r.bedrooms===0},
-    {label:'1 BR',   f:r=>r.bedrooms===1},
-    {label:'2 BR',   f:r=>r.bedrooms===2},
-    {label:'3 BR',   f:r=>r.bedrooms===3},
-    {label:'4+ BR',  f:r=>r.bedrooms>=4},
+    {label:'Studio',f:r=>r.bedrooms===0},
+    {label:'1 BR',  f:r=>r.bedrooms===1},
+    {label:'2 BR',  f:r=>r.bedrooms===2},
+    {label:'3 BR',  f:r=>r.bedrooms===3},
+    {label:'4+ BR', f:r=>r.bedrooms>=4},
   ];
   const brRows=BR.map(b=>{
     const g=real.filter(r=>r.bedrooms!=null&&b.f(r));
     if(!g.length) return null;
-    const prices=g.map(r=>r.price);
-    return{label:b.label,median:median(prices),avg:Math.round(prices.reduce((s,x)=>s+x,0)/prices.length),min:Math.min(...prices),max:Math.max(...prices),count:g.length};
+    const p=g.map(r=>r.price);
+    return{label:b.label,median:median(p),avg:Math.round(p.reduce((s,x)=>s+x,0)/p.length),min:Math.min(...p),max:Math.max(...p),count:g.length};
   }).filter(Boolean);
-
   document.getElementById('br-tbody').innerHTML=brRows.length
-    ?brRows.map(r=>`<tr><td>${r.label}</td><td class="median-val">${fmt$(r.median)}</td><td>${fmt$(r.avg)}</td><td class="range-val">${fmt$(r.min)}</td><td class="range-val">${fmt$(r.max)}</td><td class="count-val">${r.count}</td></tr>`).join('')
+    ?brRows.map(r=>`<tr><td>${r.label}</td><td class="median-val">${fmt$(r.median)}</td><td>${fmt$(r.avg)}</td><td class="muted-val">${fmt$(r.min)}</td><td class="muted-val">${fmt$(r.max)}</td><td class="muted-val">${r.count}</td></tr>`).join('')
     :'<tr><td colspan="6" class="no-data">Not enough data</td></tr>';
+
+  // DOM table by bedroom type
+  const domRows=BR.map(b=>{
+    const g=withDom.filter(r=>r.bedrooms!=null&&b.f(r));
+    if(!g.length) return null;
+    const d=g.map(r=>daysBetween(r.first_seen,today)).filter(x=>x!=null&&x>=0);
+    if(!d.length) return null;
+    const avg=d.reduce((s,x)=>s+x,0)/d.length;
+    return{label:b.label,avg,min:Math.min(...d),max:Math.max(...d),count:g.length};
+  }).filter(Boolean);
+  const domNote=withDom.length?`Based on ${withDom.length} listings with first-seen date tracked.`:'first_seen tracking starts with the next scrape run.';
+  document.getElementById('dom-note').textContent=domNote;
+  document.getElementById('dom-tbody').innerHTML=domRows.length
+    ?domRows.map(r=>`<tr><td>${r.label}</td><td>${fmtDom(r.avg)}</td><td class="muted-val">${r.min}d</td><td class="muted-val">${r.max}d</td><td class="muted-val">${r.count}</td></tr>`).join('')
+    :'<tr><td colspan="5" class="no-data">Accumulating — check back tomorrow</td></tr>';
 
   const color=MARKETS[currentMarket].color;
 
-  // Price distribution (real only)
+  // Price distribution
   const BUCKETS=[
-    {l:'Under $1.5k',t:p=>p<1500},{l:'$1.5–2k',t:p=>p<2000},
+    {l:'<$1.5k',t:p=>p<1500},{l:'$1.5–2k',t:p=>p<2000},
     {l:'$2–2.5k',t:p=>p<2500},{l:'$2.5–3k',t:p=>p<3000},
     {l:'$3–4k',t:p=>p<4000},{l:'$4–5k',t:p=>p<5000},{l:'$5k+',t:p=>p>=5000},
   ];
   rebuildBar('chart-dist',BUCKETS.map(b=>b.l),BUCKETS.map(b=>real.filter(r=>b.t(r.price)).length),color,'Listings');
 
-  // Time series (all rows)
+  // New listings per day
   const dc={};
   rows.forEach(r=>{const d=r.scraped_at?.slice(0,10);if(d)dc[d]=(dc[d]||0)+1});
   const days30=Object.keys(dc).sort().slice(-30);
   rebuildLine('chart-time',days30,days30.map(d=>dc[d]),color);
 
-  // ── Bedroom mix: current 30 days vs prior 30 days ──────────────────────
+  // Bedroom mix: current 30 vs prior 30
   const allDates=Object.keys(dc).sort();
-  const cur30Dates=new Set(allDates.slice(-30));
-  const prior30Dates=new Set(allDates.slice(-60,-30));
-
+  const cur30=new Set(allDates.slice(-30));
+  const prior30=new Set(allDates.slice(-60,-30));
+  const realWithDate=real.filter(r=>r.scraped_at);
   const BR_LABELS=['Studio','1 BR','2 BR','3 BR','4+ BR'];
-  const BR_FILTERS=[r=>r.bedrooms===0,r=>r.bedrooms===1,r=>r.bedrooms===2,r=>r.bedrooms===3,r=>r.bedrooms>=4];
-
-  const realWithBeds=real.filter(r=>r.bedrooms!=null&&r.scraped_at);
-  const curCounts =BR_FILTERS.map(f=>realWithBeds.filter(r=>cur30Dates.has(r.scraped_at.slice(0,10))&&f(r)).length);
-  const priorCounts=BR_FILTERS.map(f=>realWithBeds.filter(r=>prior30Dates.has(r.scraped_at.slice(0,10))&&f(r)).length);
-
-  rebuildGroupedBar('chart-brmix', BR_LABELS, curCounts, priorCounts, color);
+  const BR_FILT=[r=>r.bedrooms===0,r=>r.bedrooms===1,r=>r.bedrooms===2,r=>r.bedrooms===3,r=>r.bedrooms>=4];
+  const curC =BR_FILT.map(f=>realWithDate.filter(r=>cur30.has(r.scraped_at.slice(0,10))&&f(r)&&r.bedrooms!=null).length);
+  const priorC=BR_FILT.map(f=>realWithDate.filter(r=>prior30.has(r.scraped_at.slice(0,10))&&f(r)&&r.bedrooms!=null).length);
+  rebuildGroupedBar('chart-brmix',BR_LABELS,curC,priorC,color);
 }
 
+// ── Snapshots: trend + absorption ────────────────────────────────────────
+async function loadSnapshots(){
+  // Fetch last 90 days of snapshots for this market
+  const cutoff=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+  const snaps=await sbFetch('daily_snapshots',{
+    select:'snapshot_date,bedrooms,category,listing_count,median_price,new_listings,removed_listings,avg_dom_removed',
+    market:`eq.${currentMarket}`,
+    snapshot_date:`gte.${cutoff}`,
+    order:'snapshot_date.asc',
+    limit:'5000',
+  });
+
+  trendDataCache=snaps;
+
+  // Absorption (last 30 days, category=all)
+  const absData=snaps.filter(s=>s.category==='all'&&s.bedrooms!=null);
+  buildAbsorption(absData);
+
+  // Price trend
+  rebuildTrend();
+}
+
+function buildAbsorption(snaps){
+  // Group by bedrooms, sum new+removed over last 30 days
+  const cutoff=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const recent=snaps.filter(s=>s.snapshot_date>=cutoff);
+
+  const BR_LABELS=['Studio','1 BR','2 BR','3 BR','4+ BR'];
+  const BR_VALS  =[0,1,2,3,4];
+
+  const rows=BR_VALS.map((br,i)=>{
+    const g=recent.filter(s=>(br<4?s.bedrooms===br:s.bedrooms>=4));
+    const newT=g.reduce((s,x)=>s+(x.new_listings||0),0);
+    const remT=g.reduce((s,x)=>s+(x.removed_listings||0),0);
+    const ratio=remT>0?(newT/remT):null;
+    return{label:BR_LABELS[i],newT,remT,ratio};
+  }).filter(r=>r.newT>0||r.remT>0);
+
+  const note=snaps.length
+    ?`Based on ${[...new Set(snaps.map(s=>s.snapshot_date))].length} days of snapshot data.`
+    :'Absorption data accumulates after the first full day of tracking.';
+  document.getElementById('absorption-note').textContent=note;
+
+  if(!rows.length){
+    document.getElementById('absorption-list').innerHTML='<div class="no-data">Accumulating — check back after first full scrape cycle</div>';
+    return;
+  }
+
+  const maxVal=Math.max(...rows.flatMap(r=>[r.newT,r.remT]),1);
+  document.getElementById('absorption-list').innerHTML=rows.map(r=>{
+    const ratioCls=r.ratio==null?'ratio-bal':r.ratio>1.1?'ratio-tight':r.ratio<0.9?'ratio-loose':'ratio-bal';
+    const ratioTxt=r.ratio!=null?r.ratio.toFixed(2):'—';
+    const newW=(r.newT/maxVal*100).toFixed(1);
+    const remW=(r.remT/maxVal*100).toFixed(1);
+    return`<div class="absorption-row">
+      <span class="absorption-label">${r.label}</span>
+      <div class="absorption-bar-wrap">
+        <div class="absorption-bar-new" style="width:${newW}%"></div>
+        <div class="absorption-bar-rem" style="width:${remW}%;top:3px"></div>
+      </div>
+      <span style="font-size:11px;color:var(--muted);min-width:90px">▲${r.newT} ▼${r.remT}</span>
+      <span class="absorption-ratio ${ratioCls}">${ratioTxt}</span>
+    </div>`;
+  }).join('');
+}
+
+function rebuildTrend(){
+  if(!trendDataCache) return;
+  const snaps=trendDataCache.filter(s=>s.category==='all'&&s.median_price);
+
+  const BR_CONFIG=[
+    {br:0,   label:'Studio', id:'trend-studio', color:'#9b8ed4'},
+    {br:1,   label:'1 BR',   id:'trend-1br',    color:'#6ea8d4'},
+    {br:2,   label:'2 BR',   id:'trend-2br',    color:'#d4a84b'},
+    {br:3,   label:'3 BR',   id:'trend-3br',    color:'#6ecfa0'},
+    {br:4,   label:'4BR+',   id:'trend-4br',    color:'#d4836e'},
+  ];
+
+  // Build date axis from all available dates
+  const allDates=[...new Set(snaps.map(s=>s.snapshot_date))].sort();
+
+  const datasets=BR_CONFIG
+    .filter(b=>document.getElementById(b.id)?.checked)
+    .map(b=>{
+      const brSnaps=snaps.filter(s=>b.br<4?s.bedrooms===b.br:s.bedrooms>=4);
+      const byDate={};
+      brSnaps.forEach(s=>byDate[s.snapshot_date]=s.median_price);
+      return{
+        label:b.label,
+        data:allDates.map(d=>byDate[d]??null),
+        borderColor:b.color,
+        backgroundColor:'transparent',
+        borderWidth:2,
+        pointRadius:0,
+        tension:.3,
+        spanGaps:true,
+      };
+    }).filter(ds=>ds.data.some(v=>v!=null));
+
+  const noteEl=document.getElementById('trend-note');
+  if(allDates.length<5){
+    noteEl.textContent='Price trends will display after ~5 days of snapshot data accumulates.';
+  } else {
+    noteEl.textContent=`Showing ${allDates.length} days of data. Trend lines reflect daily median asking price.`;
+  }
+
+  if(charts['chart-trend']) charts['chart-trend'].destroy();
+  charts['chart-trend']=new Chart(document.getElementById('chart-trend'),{
+    type:'line',
+    data:{labels:allDates,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:true,position:'top',align:'end',labels:{color:'#7a8399',font:{size:11},boxWidth:12,padding:14}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt$(ctx.parsed.y)}`}}
+      },
+      scales:{
+        x:{grid:{color:'#1e2128'},ticks:{maxRotation:30,autoSkip:true,maxTicksLimit:12}},
+        y:{grid:{color:'#1e2128'},ticks:{callback:v=>'$'+Number(v).toLocaleString()}}
+      }
+    }
+  });
+}
+
+// ── Neighborhoods + Map ───────────────────────────────────────────────────
 async function loadNeighborhoods(){
-  const rows=await sbFetch({
+  const rows=await sbFetch('listings',{
     select:'neighborhood,price',
     market:`eq.${currentMarket}`,
+    price:'gte.500',
     limit:'10000',
-  },['price=gte.500','price=lte.20000','neighborhood=not.is.null']);
-
+  });
   const hoods={};
   rows.forEach(r=>{
-    if(!r.neighborhood) return;
+    if(!r.neighborhood||!r.price||r.price>20000) return;
     if(!hoods[r.neighborhood]) hoods[r.neighborhood]={prices:[],name:r.neighborhood};
     hoods[r.neighborhood].prices.push(r.price);
   });
@@ -447,6 +682,12 @@ async function loadNeighborhoods(){
     avg_price:Math.round(h.prices.reduce((s,x)=>s+x,0)/h.prices.length),
     min_price:Math.min(...h.prices),max_price:Math.max(...h.prices),
   })).sort((a,b)=>b.count-a.count);
+
+  // Populate hood filter dropdown
+  const sel=document.getElementById('f-hood');
+  const cur=sel.value;
+  sel.innerHTML='<option value="all">Any</option>'+
+    sorted.map(n=>`<option value="${n.name}"${n.name===cur?' selected':''}>${n.name} (${n.count})</option>`).join('');
 
   const max=sorted[0]?.count||1;
   const color=MARKETS[currentMarket].color;
@@ -477,135 +718,157 @@ function updateMap(hoods,color){
   markerLayer.clearLayers();
   const max=hoods[0]?.count||1;
   for(const n of hoods.slice(0,30)){
-    const coords=coordsFor(n.name);
-    if(!coords) continue;
-    L.circleMarker(coords,{radius:7+(n.count/max)*22,fillColor:color,color:'#0e0f11',weight:1.5,opacity:.9,fillOpacity:.5})
-    .bindPopup(`<div style="font-family:'DM Mono',monospace;font-size:13px;line-height:1.6"><strong style="color:${color}">${n.name}</strong><br>Avg: <strong>${fmt$(n.avg_price)}</strong><br>Range: ${fmt$(n.min_price)} – ${fmt$(n.max_price)}<br><span style="color:#7a8399">${n.count} listings</span></div>`,{className:'dp'})
+    const c=coordsFor(n.name);
+    if(!c) continue;
+    L.circleMarker(c,{radius:7+(n.count/max)*22,fillColor:color,color:'#0e0f11',weight:1.5,opacity:.9,fillOpacity:.5})
+    .bindPopup(`<div style="font-family:'DM Mono',monospace;font-size:13px;line-height:1.6"><strong style="color:${color}">${n.name}</strong><br>Median: <strong>${fmt$(median(Array(n.count).fill(n.avg_price)))}</strong><br>Range: ${fmt$(n.min_price)} – ${fmt$(n.max_price)}<br><span style="color:#7a8399">${n.count} listings</span></div>`,{className:'dp'})
     .addTo(markerLayer);
   }
 }
 
+// ── Comps / Listings table ────────────────────────────────────────────────
+async function loadListings(){
+  const today=new Date().toISOString().slice(0,10);
+  const cat  =document.getElementById('f-cat').value;
+  const beds =document.getElementById('f-beds').value;
+  const baths=document.getElementById('f-baths').value;
+  const hood =document.getElementById('f-hood').value;
+  const minP =parseInt(document.getElementById('f-min').value)||0;
+  const maxP =parseInt(document.getElementById('f-max').value)||20000;
+  const minSqft=parseInt(document.getElementById('f-sqft').value)||0;
+
+  const params={
+    select:'id,title,category,price,bedrooms,bathrooms,sqft,neighborhood,url,posted_date,first_seen',
+    market:`eq.${currentMarket}`,
+    order:'scraped_at.desc',
+    limit:'500',
+  };
+  const extra=[`price=gte.${minP}`,`price=lte.${maxP}`];
+  if(cat!=='all')  extra.push(`category=eq.${cat}`);
+  if(beds==='0')   extra.push('bedrooms=eq.0');
+  else if(beds==='4') extra.push('bedrooms=gte.4');
+  else if(beds!=='all') extra.push(`bedrooms=eq.${beds}`);
+  if(baths==='3')  extra.push('bathrooms=gte.3');
+  else if(baths!=='all') extra.push(`bathrooms=eq.${baths}`);
+  if(hood!=='all') extra.push(`neighborhood=eq.${hood}`);
+  if(minSqft>0)    extra.push(`sqft=gte.${minSqft}`);
+
+  const url=new URL(`${SUPABASE_URL}/rest/v1/listings`);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.append(k,v));
+  extra.forEach(e=>{const[k,...vArr]=e.split('=');url.searchParams.append(k,vArr.join('='))});
+  const res=await fetch(url,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
+  const rows=await res.json();
+
+  // Augment with computed fields
+  listingsCache=rows.map(r=>{
+    const dom=r.first_seen?daysBetween(r.first_seen,today):null;
+    const ppsf=(r.price&&r.sqft&&r.sqft>0)?Math.round(r.price/r.sqft):null;
+    return{...r,dom,ppsf};
+  });
+
+  renderListings();
+}
+
+function renderListings(){
+  const sorted=[...listingsCache].sort((a,b)=>{
+    let av=a[sortField],bv=b[sortField];
+    if(av==null) return 1;
+    if(bv==null) return -1;
+    if(typeof av==='string') return sortDir*av.localeCompare(bv);
+    return sortDir*(av-bv);
+  });
+
+  const withPpsf=sorted.filter(r=>r.ppsf!=null);
+  const medPpsf=withPpsf.length?median(withPpsf.map(r=>r.ppsf)):null;
+  document.getElementById('comps-summary').textContent=
+    `${sorted.length} listings${medPpsf?` · Median $/sqft: $${medPpsf}`:''}${withPpsf.length?` (${withPpsf.length} with sqft data)`:''}`;
+
+  const tbody=document.getElementById('listings-body');
+  if(!sorted.length){tbody.innerHTML='<tr><td colspan="10" class="no-data">No listings match.</td></tr>';return}
+
+  tbody.innerHTML=sorted.map(r=>`
+    <tr>
+      <td><a href="${r.url||'#'}" target="_blank" class="truncate" title="${(r.title||'').replace(/"/g,"'")}">${r.title||'—'}</a></td>
+      <td><span class="cat-badge ${r.category}">${r.category==='room_rental'?'Room':r.category}</span></td>
+      <td class="price-cell">${r.price?fmt$(r.price):'—'}</td>
+      <td class="ppsf-cell">${r.ppsf?'$'+r.ppsf+'/sf':'—'}</td>
+      <td>${r.bedrooms!=null?(r.bedrooms===0?'Studio':r.bedrooms+' BR'):'—'}</td>
+      <td>${r.bathrooms!=null?r.bathrooms+' BA':'—'}</td>
+      <td>${r.sqft?Number(r.sqft).toLocaleString():'—'}</td>
+      <td>${r.neighborhood||'—'}</td>
+      <td>${fmtDom(r.dom)}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${r.posted_date||'—'}</td>
+    </tr>`).join('');
+}
+
+function sortListings(field){
+  if(sortField===field) sortDir*=-1;
+  else{sortField=field;sortDir=field==='price'||field==='dom'||field==='ppsf'?-1:1}
+  document.querySelectorAll('table.listings th').forEach(th=>th.classList.remove('sorted'));
+  event.target.classList.add('sorted');
+  renderListings();
+}
+
+function resetFilters(){
+  document.getElementById('f-cat').value='all';
+  document.getElementById('f-beds').value='all';
+  document.getElementById('f-baths').value='all';
+  document.getElementById('f-hood').value='all';
+  document.getElementById('f-min').value='0';
+  document.getElementById('f-max').value='20000';
+  document.getElementById('f-sqft').value='0';
+  loadListings();
+}
+
+// ── Chart builders ────────────────────────────────────────────────────────
 function rebuildBar(id,labels,values,color,label){
   if(charts[id]) charts[id].destroy();
   charts[id]=new Chart(document.getElementById(id),{type:'bar',data:{labels,datasets:[{label,data:values,backgroundColor:color+'55',borderColor:color,borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:30}},y:{grid:{color:'#1e2128'}}}}});
 }
+
 function rebuildLine(id,labels,values,color){
   if(charts[id]) charts[id].destroy();
   charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets:[{label:'Listings',data:values,borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:2,fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:40,autoSkip:true,maxTicksLimit:10}},y:{grid:{color:'#1e2128'}}}}});
 }
 
-function rebuildGroupedBar(id, labels, curCounts, priorCounts, color){
-  if(charts[id]) charts[id].destroy();
-
-  // Compute % change labels shown above current bars
-  const deltas = curCounts.map((c,i)=>{
-    const p = priorCounts[i];
-    if(!p) return null;
-    return Math.round((c-p)/p*100);
+function rebuildGroupedBar(id,labels,curCounts,priorCounts,color){
+  const deltas=curCounts.map((c,i)=>{
+    const p=priorCounts[i];
+    return p?Math.round((c-p)/p*100):null;
   });
-
-  // Custom plugin: draw delta labels above current bars
-  const deltaPlugin = {
+  const deltaPlugin={
     id:'deltaLabels',
     afterDatasetsDraw(chart){
-      const {ctx,data,scales:{x,y}}=chart;
-      const ds=chart.data.datasets[0]; // current period bars
+      const{ctx}=chart;
       chart.getDatasetMeta(0).data.forEach((bar,i)=>{
         const d=deltas[i];
         if(d==null) return;
         const sign=d>0?'+':'';
-        const clr=d>0?'#6ecfa0':d<0?'#d46e6e':'#7a8399';
         ctx.save();
         ctx.font="bold 11px 'DM Mono',monospace";
-        ctx.fillStyle=clr;
+        ctx.fillStyle=d>0?'#6ecfa0':d<0?'#d46e6e':'#7a8399';
         ctx.textAlign='center';
-        ctx.fillText(`${sign}${d}%`, bar.x, bar.y-5);
+        ctx.fillText(`${sign}${d}%`,bar.x,bar.y-5);
         ctx.restore();
       });
     }
   };
-
+  if(charts[id]) charts[id].destroy();
   charts[id]=new Chart(document.getElementById(id),{
-    type:'bar',
-    plugins:[deltaPlugin],
-    data:{
-      labels,
-      datasets:[
-        {
-          label:'Current 30 days',
-          data:curCounts,
-          backgroundColor:color+'99',
-          borderColor:color,
-          borderWidth:1,
-          borderRadius:2,
-        },
-        {
-          label:'Prior 30 days',
-          data:priorCounts,
-          backgroundColor:'#2a2e3699',
-          borderColor:'#4a5060',
-          borderWidth:1,
-          borderRadius:2,
-        },
-      ]
-    },
+    type:'bar',plugins:[deltaPlugin],
+    data:{labels,datasets:[
+      {label:'Current 30d',data:curCounts,backgroundColor:color+'99',borderColor:color,borderWidth:1,borderRadius:2},
+      {label:'Prior 30d',data:priorCounts,backgroundColor:'#2a2e3699',borderColor:'#4a5060',borderWidth:1,borderRadius:2},
+    ]},
     options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      layout:{padding:{top:24}},
+      responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
       plugins:{
-        legend:{
-          display:true,
-          position:'top',
-          align:'end',
-          labels:{color:'#7a8399',font:{size:11},boxWidth:12,padding:16}
-        },
-        tooltip:{
-          callbacks:{
-            afterBody:(items)=>{
-              const i=items[0]?.dataIndex;
-              const d=deltas[i];
-              if(d==null) return '';
-              return `Change: ${d>0?'+':''}${d}%`;
-            }
-          }
-        }
+        legend:{display:true,position:'top',align:'end',labels:{color:'#7a8399',font:{size:11},boxWidth:12,padding:14}},
+        tooltip:{callbacks:{afterBody:items=>{const d=deltas[items[0]?.dataIndex];return d!=null?`Change: ${d>0?'+':''}${d}%`:''}}}
       },
-      scales:{
-        x:{grid:{color:'#1e2128'}},
-        y:{grid:{color:'#1e2128'},ticks:{stepSize:1}}
-      }
+      scales:{x:{grid:{color:'#1e2128'}},y:{grid:{color:'#1e2128'},ticks:{stepSize:1}}}
     }
   });
-}
-
-async function loadListings(){
-  const cat=document.getElementById('f-cat').value;
-  const beds=document.getElementById('f-beds').value;
-  const minP=parseInt(document.getElementById('f-min').value)||0;
-  const maxP=parseInt(document.getElementById('f-max').value)||20000;
-
-  const base={select:'title,category,price,bedrooms,bathrooms,sqft,neighborhood,url,posted_date',market:`eq.${currentMarket}`,order:'scraped_at.desc',limit:'200'};
-  const extra=[`price=gte.${minP}`,`price=lte.${maxP}`];
-  if(cat!=='all') extra.push(`category=eq.${cat}`);
-  if(beds==='0') extra.push('bedrooms=eq.0');
-  else if(beds==='4') extra.push('bedrooms=gte.4');
-  else if(beds!=='all') extra.push(`bedrooms=eq.${beds}`);
-
-  const rows=await sbFetch(base,extra);
-  const tbody=document.getElementById('listings-body');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" class="no-data">No listings match.</td></tr>';return}
-  tbody.innerHTML=rows.map(r=>`
-    <tr>
-      <td><a href="${r.url||'#'}" target="_blank" class="truncate" title="${(r.title||'').replace(/"/g,"'")}">${r.title||'—'}</a></td>
-      <td><span class="cat-badge ${r.category}">${r.category==='room_rental'?'Room':r.category}</span></td>
-      <td class="price-cell">${r.price?fmt$(r.price):'—'}</td>
-      <td>${r.bedrooms!=null?(r.bedrooms===0?'Studio':r.bedrooms+' BR'):'—'}</td>
-      <td>${r.bathrooms!=null?r.bathrooms+' BA':'—'}</td>
-      <td>${r.sqft?Number(r.sqft).toLocaleString():'—'}</td>
-      <td>${r.neighborhood||'—'}</td>
-      <td style="white-space:nowrap;color:var(--muted)">${r.posted_date||'—'}</td>
-    </tr>`).join('');
 }
 
 document.addEventListener('DOMContentLoaded',()=>{initMap();loadAll()});
