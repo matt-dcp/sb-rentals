@@ -3,126 +3,109 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SB + Ojai Rental Market</title>
+<title>SB Region Rental Market</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:      #0e0f11;
-    --surface: #16181c;
-    --border:  #2a2e36;
-    --muted:   #7a8399;
-    --text:    #e8ecf4;
-    --bright:  #f5f7fc;
-    --gold:    #d4a84b;
-    --blue:    #6ea8d4;
-    --green:   #6ecfa0;
-    --red:     #d46e6e;
-    --accent:  #d4a84b;
-    --mono:    'DM Mono', monospace;
-    --serif:   'DM Serif Display', serif;
-    --fs:      14px;
+    --bg:#0e0f11; --surface:#16181c; --border:#2a2e36;
+    --muted:#7a8399; --text:#e8ecf4; --bright:#f5f7fc;
+    --gold:#d4a84b; --blue:#6ea8d4; --green:#6ecfa0; --red:#d46e6e;
+    --accent:#d4a84b;
+    --mono:'DM Mono',monospace; --serif:'DM Serif Display',serif; --fs:14px;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: var(--fs); line-height: 1.65; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:var(--fs);line-height:1.65}
 
-  header {
-    border-bottom: 1px solid var(--border);
-    padding: 24px 36px 20px;
-    display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;
-  }
-  header h1 { font-family: var(--serif); font-size: 2rem; color: var(--bright); }
-  #market-label { font-style: italic; color: var(--accent); transition: color 0.2s; }
-  .header-meta { color: var(--muted); font-size: 12px; text-align: right; }
-  .header-meta strong { color: var(--accent); }
+  header{border-bottom:1px solid var(--border);padding:24px 36px 20px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+  header h1{font-family:var(--serif);font-size:2rem;color:var(--bright)}
+  #market-label{font-style:italic;color:var(--accent);transition:color 0.2s}
+  .header-meta{color:var(--muted);font-size:12px;text-align:right}
+  .header-meta strong{color:var(--accent)}
 
-  .market-tabs { display:flex; border-bottom:1px solid var(--border); padding:0 36px; background:var(--surface); }
-  .tab {
-    padding:11px 24px; font-family:var(--mono); font-size:12px;
-    letter-spacing:1.2px; text-transform:uppercase; color:var(--muted);
-    cursor:pointer; border:none; background:none;
-    border-bottom:2px solid transparent; margin-bottom:-1px; transition:color 0.15s;
-  }
-  .tab:hover { color:var(--text); }
-  .tab.active { color:var(--bright); border-bottom-color:var(--accent); }
+  .market-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 36px;background:var(--surface);overflow-x:auto}
+  .tab{padding:11px 20px;font-family:var(--mono);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s;white-space:nowrap}
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--bright);border-bottom-color:var(--accent)}
 
-  main { padding:28px 36px; width:100%; }
+  .data-notes{background:#111316;border-bottom:1px solid var(--border);padding:9px 36px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--muted);line-height:1.5}
+  .note-sep{color:var(--border)}
+  .note-item em{color:#5a6275;font-style:normal}
 
-  .kpi-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:22px; }
-  @media (max-width:1100px) { .kpi-row { grid-template-columns:repeat(3,1fr); } }
-  @media (max-width:700px)  { .kpi-row { grid-template-columns:repeat(2,1fr); } }
+  main{padding:28px 36px;width:100%}
 
-  .kpi { background:var(--surface); border:1px solid var(--border); padding:18px 20px; position:relative; }
-  .kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); }
-  .kpi.blue::before  { background:var(--blue); }
-  .kpi.green::before { background:var(--green); }
-  .kpi.red::before   { background:var(--red); }
-  .kpi-label { color:var(--muted); font-size:11px; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:5px; }
-  .kpi-value { font-size:1.75rem; color:var(--bright); font-family:var(--serif); line-height:1.1; }
-  .kpi-sub   { color:var(--muted); font-size:11px; margin-top:4px; }
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px}
+  @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:700px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
 
-  .grid-2   { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-  .grid-map { display:grid; grid-template-columns:3fr 1fr; gap:16px; margin-bottom:16px; }
-  @media (max-width:1000px) { .grid-2, .grid-map { grid-template-columns:1fr; } }
+  .kpi{background:var(--surface);border:1px solid var(--border);padding:18px 20px;position:relative}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent)}
+  .kpi.blue::before{background:var(--blue)}
+  .kpi.green::before{background:var(--green)}
+  .kpi.red::before{background:var(--red)}
+  .kpi-label{color:var(--muted);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;margin-bottom:5px}
+  .kpi-value{font-size:1.75rem;color:var(--bright);font-family:var(--serif);line-height:1.1}
+  .kpi-sub{color:var(--muted);font-size:11px;margin-top:4px}
 
-  .card { background:var(--surface); border:1px solid var(--border); padding:22px; }
-  .card-title {
-    font-size:11px; letter-spacing:1.4px; text-transform:uppercase;
-    color:var(--muted); margin-bottom:16px; padding-bottom:11px;
-    border-bottom:1px solid var(--border);
-  }
-  .card-title span { color:var(--accent); }
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  .grid-map{display:grid;grid-template-columns:3fr 1fr;gap:16px;margin-bottom:16px}
+  @media(max-width:1000px){.grid-2,.grid-map{grid-template-columns:1fr}}
 
-  #map { height:400px; background:#0a0b0d; }
-  .leaflet-container { background:#111317 !important; font-family:var(--mono) !important; }
-  .map-legend { display:flex; gap:16px; margin-top:10px; font-size:12px; color:var(--muted); align-items:center; flex-wrap:wrap; }
-  .legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:5px; vertical-align:middle; }
+  .card{background:var(--surface);border:1px solid var(--border);padding:22px}
+  .card-title{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;padding-bottom:11px;border-bottom:1px solid var(--border)}
+  .card-title span{color:var(--accent)}
 
-  .br-table { width:100%; border-collapse:collapse; font-size:13px; }
-  .br-table th { text-align:right; color:var(--muted); font-size:11px; letter-spacing:1px; text-transform:uppercase; padding:8px 12px; border-bottom:1px solid var(--border); }
-  .br-table th:first-child { text-align:left; }
-  .br-table td { padding:10px 12px; border-bottom:1px solid #1e2128; text-align:right; }
-  .br-table td:first-child { text-align:left; color:var(--bright); font-size:14px; }
-  .br-table tr:last-child td { border-bottom:none; }
-  .br-table tr:hover td { background:#1c1f26; }
-  .median-val { color:var(--accent); font-weight:500; }
-  .range-val  { color:var(--muted); font-size:12px; }
-  .count-val  { color:var(--muted); font-size:12px; }
+  #map{height:380px;background:#0a0b0d}
+  .leaflet-container{background:#111317 !important;font-family:var(--mono) !important}
+  .map-legend{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted);align-items:center;flex-wrap:wrap}
+  .legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
 
-  .hood-row  { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:13px; }
-  .hood-name { min-width:120px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hood-bar-wrap { flex:1; background:var(--bg); height:5px; }
-  .hood-bar  { height:5px; background:var(--accent); transition:width 0.5s ease; }
-  .hood-count { min-width:28px; text-align:right; color:var(--muted); font-size:11px; }
-  .hood-price { min-width:70px; text-align:right; color:var(--accent); font-size:12px; }
+  .br-table{width:100%;border-collapse:collapse;font-size:13px}
+  .br-table th{text-align:right;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border)}
+  .br-table th:first-child{text-align:left}
+  .br-table td{padding:10px 12px;border-bottom:1px solid #1e2128;text-align:right}
+  .br-table td:first-child{text-align:left;color:var(--bright);font-size:14px}
+  .br-table tr:last-child td{border-bottom:none}
+  .br-table tr:hover td{background:#1c1f26}
+  .median-val{color:var(--accent);font-weight:500}
+  .range-val{color:var(--muted);font-size:12px}
+  .count-val{color:var(--muted);font-size:12px}
 
-  .filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
-  .filters label { color:var(--muted); font-size:11px; letter-spacing:1px; text-transform:uppercase; }
-  select, input[type=number] { background:var(--bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; padding:6px 10px; outline:none; }
-  select:focus, input:focus { border-color:var(--accent); }
-  .btn { background:var(--accent); color:#0e0f11; border:none; font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:1px; padding:7px 16px; cursor:pointer; text-transform:uppercase; }
-  .btn:hover { opacity:0.85; }
+  .hood-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+  .hood-name{min-width:120px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hood-bar-wrap{flex:1;background:var(--bg);height:5px}
+  .hood-bar{height:5px;background:var(--accent);transition:width 0.5s ease}
+  .hood-count{min-width:28px;text-align:right;color:var(--muted);font-size:11px}
+  .hood-price{min-width:70px;text-align:right;color:var(--accent);font-size:12px}
 
-  .table-wrap { overflow-x:auto; }
-  table.listings { width:100%; border-collapse:collapse; font-size:13px; }
-  table.listings th { text-align:left; color:var(--muted); font-size:11px; letter-spacing:1px; text-transform:uppercase; padding:8px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
-  table.listings td { padding:9px 12px; border-bottom:1px solid #1e2128; vertical-align:top; }
-  table.listings tr:hover td { background:#1c1f26; }
-  .price-cell { color:var(--accent); font-weight:500; }
-  .cat-badge { display:inline-block; font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:2px 7px; border:1px solid var(--border); color:var(--muted); }
-  .cat-badge.apartments { border-color:var(--blue); color:var(--blue); }
-  .cat-badge.houses     { border-color:var(--green); color:var(--green); }
-  a { color:var(--accent); text-decoration:none; }
-  a:hover { text-decoration:underline; }
-  .truncate { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:280px; }
-  .no-data { color:var(--muted); padding:20px; font-size:13px; }
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+  .filters label{color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+  select,input[type=number]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:6px 10px;outline:none}
+  select:focus,input:focus{border-color:var(--accent)}
+  .btn{background:var(--accent);color:#0e0f11;border:none;font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:1px;padding:7px 16px;cursor:pointer;text-transform:uppercase}
+  .btn:hover{opacity:0.85}
+
+  .table-wrap{overflow-x:auto}
+  table.listings{width:100%;border-collapse:collapse;font-size:13px}
+  table.listings th{text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+  table.listings td{padding:9px 12px;border-bottom:1px solid #1e2128;vertical-align:top}
+  table.listings tr:hover td{background:#1c1f26}
+  .price-cell{color:var(--accent);font-weight:500}
+  .cat-badge{display:inline-block;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border:1px solid var(--border);color:var(--muted)}
+  .cat-badge.apartments{border-color:var(--blue);color:var(--blue)}
+  .cat-badge.houses{border-color:var(--green);color:var(--green)}
+  .cat-badge.room_rental{border-color:#a06eb0;color:#a06eb0}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:280px}
+  .no-data{color:var(--muted);padding:20px;font-size:13px}
+  .room-rental-note{background:#1a1520;border:1px solid #3a2a40;padding:12px 16px;color:#b08ac0;font-size:12px;margin-bottom:16px;display:none}
 </style>
 </head>
 <body>
 
-<!-- !! REPLACE THESE TWO VALUES BEFORE DEPLOYING TO VERCEL !! -->
 <script>
   const SUPABASE_URL = 'https://wzlccltlthlaguazgten.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGNjbHRsdGhsYWd1YXpndGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc4ODMsImV4cCI6MjA4NzM1Mzg4M30.5KuGMYwAYGiK0UYDcHxgIjXAHd-s_v6gutigVIH_zZM';
@@ -131,23 +114,43 @@
 <header>
   <div>
     <h1><span id="market-label">Santa Barbara</span> Rentals</h1>
-    <div style="color:var(--muted);font-size:12px;margin-top:4px;">Apartments · Houses — Craigslist</div>
+    <div style="color:var(--muted);font-size:12px;margin-top:4px">Apartments · Houses — Craigslist</div>
   </div>
   <div class="header-meta" id="header-meta">Loading…</div>
 </header>
 
 <div class="market-tabs">
   <button class="tab active" onclick="setMarket('santa_barbara',this)">Santa Barbara</button>
+  <button class="tab"        onclick="setMarket('isla_vista',this)">Isla Vista</button>
+  <button class="tab"        onclick="setMarket('goleta',this)">Goleta</button>
+  <button class="tab"        onclick="setMarket('carpinteria',this)">Carpinteria</button>
+  <button class="tab"        onclick="setMarket('solvang',this)">Solvang</button>
+  <button class="tab"        onclick="setMarket('buellton',this)">Buellton</button>
+  <button class="tab"        onclick="setMarket('lompoc',this)">Lompoc</button>
   <button class="tab"        onclick="setMarket('ojai',this)">Ojai</button>
 </div>
 
+<div class="data-notes">
+  <span class="note-item">Source: Craigslist (<em>apa</em> + <em>hhh</em> categories), scraped daily at 8am PST</span>
+  <span class="note-sep">·</span>
+  <span class="note-item">Excludes: unpriced listings, commercial/office space, storage, housing-wanted ads, scam alerts</span>
+  <span class="note-sep">·</span>
+  <span class="note-item">Stats exclude room rentals — browse table includes them</span>
+  <span class="note-sep">·</span>
+  <span class="note-item">Neighborhood tabs use Craigslist location field; multi-city listings stay in Santa Barbara</span>
+</div>
+
 <main>
+  <div id="room-rental-note" class="room-rental-note">
+    Room rentals (single rooms in shared homes) are visible in the table below but excluded from all stats, averages, and charts above.
+  </div>
+
   <div class="kpi-row">
-    <div class="kpi">          <div class="kpi-label">Total Listings</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">in database</div></div>
-    <div class="kpi blue">     <div class="kpi-label">Overall Avg</div>  <div class="kpi-value" id="kpi-avg">—</div>  <div class="kpi-sub">all types</div></div>
+    <div class="kpi">          <div class="kpi-label">Total Listings</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">excl. room rentals</div></div>
+    <div class="kpi blue">    <div class="kpi-label">Overall Avg</div>  <div class="kpi-value" id="kpi-avg">—</div>  <div class="kpi-sub">all types</div></div>
     <div class="kpi">          <div class="kpi-label">Apts Avg</div>     <div class="kpi-value" id="kpi-apt">—</div>  <div class="kpi-sub">apartments</div></div>
-    <div class="kpi green">    <div class="kpi-label">Houses Avg</div>   <div class="kpi-value" id="kpi-house">—</div><div class="kpi-sub">houses</div></div>
-    <div class="kpi red">      <div class="kpi-label">Days Tracked</div> <div class="kpi-value" id="kpi-days">—</div> <div class="kpi-sub">history</div></div>
+    <div class="kpi green">   <div class="kpi-label">Houses Avg</div>   <div class="kpi-value" id="kpi-house">—</div><div class="kpi-sub">houses</div></div>
+    <div class="kpi red">     <div class="kpi-label">Days Tracked</div> <div class="kpi-value" id="kpi-days">—</div> <div class="kpi-sub">history</div></div>
   </div>
 
   <div class="grid-map">
@@ -190,9 +193,21 @@
     <div class="card-title">Browse Listings</div>
     <div class="filters">
       <label>Type</label>
-      <select id="f-cat"><option value="all">All</option><option value="apartments">Apartments</option><option value="houses">Houses</option></select>
+      <select id="f-cat">
+        <option value="all">All</option>
+        <option value="apartments">Apartments</option>
+        <option value="houses">Houses</option>
+        <option value="room_rental">Room Rentals</option>
+      </select>
       <label>Beds</label>
-      <select id="f-beds"><option value="all">Any</option><option value="0">Studio</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option></select>
+      <select id="f-beds">
+        <option value="all">Any</option>
+        <option value="0">Studio</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4+</option>
+      </select>
       <label>Min $</label>
       <input type="number" id="f-min" value="0" step="100" style="width:88px">
       <label>Max $</label>
@@ -209,332 +224,255 @@
 </main>
 
 <script>
-Chart.defaults.color       = '#7a8399';
-Chart.defaults.borderColor = '#2a2e36';
-Chart.defaults.font.family = "'DM Mono', monospace";
-Chart.defaults.font.size   = 12;
+Chart.defaults.color='#7a8399';Chart.defaults.borderColor='#2a2e36';
+Chart.defaults.font.family="'DM Mono',monospace";Chart.defaults.font.size=12;
 
-const MARKETS = {
-  santa_barbara: { label: 'Santa Barbara', color: '#d4a84b' },
-  ojai:          { label: 'Ojai',           color: '#6ecfa0' },
+const MARKETS={
+  santa_barbara:{label:'Santa Barbara', color:'#d4a84b'},
+  isla_vista:   {label:'Isla Vista',    color:'#6ea8d4'},
+  goleta:       {label:'Goleta',        color:'#7dcfa8'},
+  carpinteria:  {label:'Carpinteria',   color:'#d4836e'},
+  solvang:      {label:'Solvang',       color:'#a8b86e'},
+  buellton:     {label:'Buellton',      color:'#b8a06e'},
+  lompoc:       {label:'Lompoc',        color:'#8e8eb8'},
+  ojai:         {label:'Ojai',          color:'#6ecfa0'},
 };
-let currentMarket = 'santa_barbara';
-let charts = {};
-let leafletMap, markerLayer;
 
-const HOOD_COORDS = {
-  'downtown':[34.4208,-119.6982],'downtown santa barbara':[34.4208,-119.6982],
-  'state street':[34.4230,-119.7020],'eastside':[34.4183,-119.6850],
-  'west side':[34.4250,-119.7180],'westside':[34.4250,-119.7180],
-  'mesa':[34.3997,-119.7341],'the mesa':[34.3997,-119.7341],
-  'upper east':[34.4280,-119.6880],'riviera':[34.4380,-119.7000],
-  'mission canyon':[34.4480,-119.7140],'hope ranch':[34.4180,-119.7580],
-  'goleta':[34.4361,-119.8276],'santa barbara':[34.4208,-119.6982],
+const MAP_CENTERS={
+  santa_barbara:{center:[34.421,-119.698],zoom:12},
+  isla_vista:   {center:[34.414,-119.860],zoom:14},
+  goleta:       {center:[34.436,-119.827],zoom:13},
+  carpinteria:  {center:[34.399,-119.516],zoom:13},
+  solvang:      {center:[34.596,-120.138],zoom:13},
+  buellton:     {center:[34.614,-120.193],zoom:13},
+  lompoc:       {center:[34.639,-120.457],zoom:12},
+  ojai:         {center:[34.448,-119.243],zoom:12},
+};
+
+const HOOD_COORDS={
+  'downtown':[34.4208,-119.6982],'state street':[34.4230,-119.7020],
+  'eastside':[34.4183,-119.6850],'westside':[34.4250,-119.7180],
+  'mesa':[34.3997,-119.7341],'upper east':[34.4280,-119.6880],
+  'riviera':[34.4380,-119.7000],'mission canyon':[34.4480,-119.7140],
+  'hope ranch':[34.4180,-119.7580],'goleta':[34.4361,-119.8276],
   'montecito':[34.4275,-119.6364],'carpinteria':[34.3989,-119.5157],
   'summerland':[34.4197,-119.5964],'isla vista':[34.4138,-119.8604],
   'noleta':[34.4480,-119.8000],'samarkand':[34.4340,-119.7240],
-  'san roque':[34.4380,-119.7280],
+  'san roque':[34.4380,-119.7280],'santa barbara':[34.4208,-119.6982],
   'ojai':[34.4480,-119.2430],'downtown ojai':[34.4480,-119.2430],
-  'east end':[34.4480,-119.2100],'west ojai':[34.4480,-119.2700],
   'upper ojai':[34.5050,-119.1800],'oak view':[34.4020,-119.3000],
-  'meiners oaks':[34.4560,-119.2640],'mira monte':[34.4380,-119.2600],
-  'casitas springs':[34.3980,-119.3100],
-};
-const MAP_CENTERS = {
-  santa_barbara: { center:[34.421,-119.698], zoom:12 },
-  ojai:          { center:[34.448,-119.243], zoom:12 },
+  'meiners oaks':[34.4560,-119.2640],'solvang':[34.5958,-120.1376],
+  'buellton':[34.6136,-120.1932],'lompoc':[34.6391,-120.4579],
 };
 
-function coordsFor(name) {
-  if (!name) return null;
-  const k = name.toLowerCase().trim();
-  if (HOOD_COORDS[k]) return HOOD_COORDS[k];
-  const cfg = MAP_CENTERS[currentMarket];
-  return [cfg.center[0]+(Math.random()-.5)*.03, cfg.center[1]+(Math.random()-.5)*.03];
+let currentMarket='santa_barbara';
+let charts={};
+let leafletMap,markerLayer;
+
+function coordsFor(name){
+  if(!name) return null;
+  const k=name.toLowerCase().trim();
+  if(HOOD_COORDS[k]) return HOOD_COORDS[k];
+  const cfg=MAP_CENTERS[currentMarket];
+  return [cfg.center[0]+(Math.random()-.5)*.02,cfg.center[1]+(Math.random()-.5)*.02];
 }
-function fmt$(v) { return v != null ? '$'+Number(v).toLocaleString() : '—'; }
-function median(arr) {
-  if (!arr.length) return null;
-  const s = [...arr].sort((a,b)=>a-b);
-  const m = Math.floor(s.length/2);
-  return s.length%2 ? s[m] : Math.round((s[m-1]+s[m])/2);
+function fmt$(v){return v!=null?'$'+Number(v).toLocaleString():'—'}
+function median(arr){
+  if(!arr.length) return null;
+  const s=[...arr].sort((a,b)=>a-b);
+  const m=Math.floor(s.length/2);
+  return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);
 }
 
-// ── Supabase query helper ─────────────────────────────────────────────────
-async function sbQuery(table, params) {
-  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-  const res = await fetch(url, {
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-    }
-  });
-  if (!res.ok) throw new Error(`Supabase error: ${res.status}`);
+async function sbFetch(params,extraFilters=[]){
+  const url=new URL(`${SUPABASE_URL}/rest/v1/listings`);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.append(k,v));
+  extraFilters.forEach(f=>{const[k,v]=f.split(/=(.*)/s);url.searchParams.append(k,v)});
+  const res=await fetch(url,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
+  if(!res.ok) throw new Error(`Supabase ${res.status}`);
   return res.json();
 }
 
-// ── Market switch ─────────────────────────────────────────────────────────
-function setMarket(market, btn) {
-  currentMarket = market;
-  const cfg = MARKETS[market];
-  document.documentElement.style.setProperty('--accent', cfg.color);
-  document.getElementById('market-label').textContent = cfg.label;
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+function setMarket(market,btn){
+  currentMarket=market;
+  const cfg=MARKETS[market];
+  document.documentElement.style.setProperty('--accent',cfg.color);
+  document.getElementById('market-label').textContent=cfg.label;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('legend-dot').style.background  = cfg.color;
-  document.getElementById('legend-label').textContent     = cfg.label;
-  if (leafletMap) {
-    const mc = MAP_CENTERS[market];
-    leafletMap.setView(mc.center, mc.zoom);
-  }
+  document.getElementById('legend-dot').style.background=cfg.color;
+  document.getElementById('legend-label').textContent=cfg.label;
+  if(leafletMap){const mc=MAP_CENTERS[market];leafletMap.setView(mc.center,mc.zoom)}
   loadAll();
 }
 
-async function loadAll() {
-  await Promise.all([loadSummary(), loadNeighborhoods(), loadListings()]);
+async function loadAll(){
+  await Promise.all([loadSummary(),loadNeighborhoods(),loadListings()]);
 }
 
-// ── Summary / KPIs ────────────────────────────────────────────────────────
-async function loadSummary() {
-  // Fetch all priced listings for this market (capped at 10k rows — well above actual volume)
-  const rows = await sbQuery('listings', {
-    select: 'price,category,bedrooms,scraped_at,posted_date',
-    market: `eq.${currentMarket}`,
-    price:  'gte.500',
-    limit:  '10000',
-    order:  'scraped_at.desc',
+async function loadSummary(){
+  const rows=await sbFetch({
+    select:'price,category,bedrooms,scraped_at',
+    market:`eq.${currentMarket}`,
+    limit:'10000',
+    order:'scraped_at.desc',
   });
 
-  if (!rows.length) {
-    document.getElementById('header-meta').textContent = 'No data yet';
+  if(!rows.length){
+    document.getElementById('header-meta').textContent='No data yet for this market';
+    ['kpi-total','kpi-avg','kpi-apt','kpi-house','kpi-days'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('br-tbody').innerHTML='<tr><td colspan="6" class="no-data">No data</td></tr>';
     return;
   }
 
-  // Last scrape
-  const lastScrape = rows[0].scraped_at?.slice(0,19).replace('T',' ') || '—';
-  document.getElementById('header-meta').innerHTML = `Last scraped: <strong>${lastScrape}</strong> UTC`;
+  const last=rows[0].scraped_at?.slice(0,19).replace('T',' ')||'—';
+  document.getElementById('header-meta').innerHTML=`Last scraped: <strong>${last}</strong> UTC`;
 
-  // KPIs
-  const priced = rows.filter(r => r.price && r.price <= 20000);
-  const total  = rows.length;
-  const days   = new Set(rows.map(r => r.scraped_at?.slice(0,10))).size;
-  document.getElementById('kpi-total').textContent = total.toLocaleString();
-  document.getElementById('kpi-days').textContent  = days;
+  // Separate room rentals from real listings for stats
+  const real=rows.filter(r=>r.category!=='room_rental'&&r.price>=500&&r.price<=20000);
+  const roomCount=rows.filter(r=>r.category==='room_rental').length;
+  const days=new Set(rows.map(r=>r.scraped_at?.slice(0,10))).size;
 
-  const avg = r => r.length ? Math.round(r.reduce((s,x)=>s+x.price,0)/r.length) : null;
-  document.getElementById('kpi-avg').textContent   = fmt$(avg(priced));
-  document.getElementById('kpi-apt').textContent   = fmt$(avg(priced.filter(r=>r.category==='apartments')));
-  document.getElementById('kpi-house').textContent = fmt$(avg(priced.filter(r=>r.category==='houses')));
+  document.getElementById('room-rental-note').style.display=roomCount?'block':'none';
+  document.getElementById('kpi-total').textContent=real.length.toLocaleString();
+  document.getElementById('kpi-days').textContent=days;
 
-  // Bedroom table
-  const BR_LABELS = [
-    { key:'studio', label:'Studio',  filter: r => r.bedrooms === 0 },
-    { key:'1',      label:'1 BR',    filter: r => r.bedrooms === 1 },
-    { key:'2',      label:'2 BR',    filter: r => r.bedrooms === 2 },
-    { key:'3',      label:'3 BR',    filter: r => r.bedrooms === 3 },
-    { key:'4+',     label:'4+ BR',   filter: r => r.bedrooms >= 4  },
+  const avg=arr=>arr.length?Math.round(arr.reduce((s,x)=>s+x.price,0)/arr.length):null;
+  document.getElementById('kpi-avg').textContent=fmt$(avg(real));
+  document.getElementById('kpi-apt').textContent=fmt$(avg(real.filter(r=>r.category==='apartments')));
+  document.getElementById('kpi-house').textContent=fmt$(avg(real.filter(r=>r.category==='houses')));
+
+  // Bedroom table (real listings only)
+  const BR=[
+    {label:'Studio', f:r=>r.bedrooms===0},
+    {label:'1 BR',   f:r=>r.bedrooms===1},
+    {label:'2 BR',   f:r=>r.bedrooms===2},
+    {label:'3 BR',   f:r=>r.bedrooms===3},
+    {label:'4+ BR',  f:r=>r.bedrooms>=4},
   ];
-  const tbody = document.getElementById('br-tbody');
-  const brRows = BR_LABELS.map(br => {
-    const group = priced.filter(r => r.bedrooms != null && br.filter(r));
-    if (!group.length) return null;
-    const prices = group.map(r=>r.price);
-    return {
-      label:  br.label,
-      median: median(prices),
-      avg:    Math.round(prices.reduce((s,x)=>s+x,0)/prices.length),
-      min:    Math.min(...prices),
-      max:    Math.max(...prices),
-      count:  group.length,
-    };
+  const brRows=BR.map(b=>{
+    const g=real.filter(r=>r.bedrooms!=null&&b.f(r));
+    if(!g.length) return null;
+    const prices=g.map(r=>r.price);
+    return{label:b.label,median:median(prices),avg:Math.round(prices.reduce((s,x)=>s+x,0)/prices.length),min:Math.min(...prices),max:Math.max(...prices),count:g.length};
   }).filter(Boolean);
 
-  tbody.innerHTML = brRows.length
-    ? brRows.map(r => `
-        <tr>
-          <td>${r.label}</td>
-          <td class="median-val">${fmt$(r.median)}</td>
-          <td>${fmt$(r.avg)}</td>
-          <td class="range-val">${fmt$(r.min)}</td>
-          <td class="range-val">${fmt$(r.max)}</td>
-          <td class="count-val">${r.count}</td>
-        </tr>`).join('')
-    : '<tr><td colspan="6" class="no-data">No data</td></tr>';
+  document.getElementById('br-tbody').innerHTML=brRows.length
+    ?brRows.map(r=>`<tr><td>${r.label}</td><td class="median-val">${fmt$(r.median)}</td><td>${fmt$(r.avg)}</td><td class="range-val">${fmt$(r.min)}</td><td class="range-val">${fmt$(r.max)}</td><td class="count-val">${r.count}</td></tr>`).join('')
+    :'<tr><td colspan="6" class="no-data">Not enough data</td></tr>';
 
-  // Price distribution chart
-  const BUCKETS = [
-    { label:'Under $1.5k', test: p => p < 1500 },
-    { label:'$1.5–2k',     test: p => p < 2000 },
-    { label:'$2–2.5k',     test: p => p < 2500 },
-    { label:'$2.5–3k',     test: p => p < 3000 },
-    { label:'$3–4k',       test: p => p < 4000 },
-    { label:'$4–5k',       test: p => p < 5000 },
-    { label:'$5k+',        test: p => p >= 5000 },
+  const color=MARKETS[currentMarket].color;
+
+  // Price distribution (real only)
+  const BUCKETS=[
+    {l:'Under $1.5k',t:p=>p<1500},{l:'$1.5–2k',t:p=>p<2000},
+    {l:'$2–2.5k',t:p=>p<2500},{l:'$2.5–3k',t:p=>p<3000},
+    {l:'$3–4k',t:p=>p<4000},{l:'$4–5k',t:p=>p<5000},{l:'$5k+',t:p=>p>=5000},
   ];
-  const bucketCounts = BUCKETS.map(b => priced.filter(r=>b.test(r.price)).length);
-  const color = MARKETS[currentMarket].color;
-  rebuildBar('chart-dist', BUCKETS.map(b=>b.label), bucketCounts, color, 'Listings');
+  rebuildBar('chart-dist',BUCKETS.map(b=>b.l),BUCKETS.map(b=>real.filter(r=>b.t(r.price)).length),color,'Listings');
 
-  // Time series — last 30 days
-  const dayCounts = {};
-  rows.forEach(r => {
-    const d = r.scraped_at?.slice(0,10);
-    if (d) dayCounts[d] = (dayCounts[d]||0) + 1;
-  });
-  const sortedDays = Object.keys(dayCounts).sort().slice(-30);
-  rebuildLine('chart-time', sortedDays, sortedDays.map(d=>dayCounts[d]), color);
+  // Time series (all rows)
+  const dc={};
+  rows.forEach(r=>{const d=r.scraped_at?.slice(0,10);if(d)dc[d]=(dc[d]||0)+1});
+  const days30=Object.keys(dc).sort().slice(-30);
+  rebuildLine('chart-time',days30,days30.map(d=>dc[d]),color);
 }
 
-// ── Neighborhoods ─────────────────────────────────────────────────────────
-async function loadNeighborhoods() {
-  const rows = await sbQuery('listings', {
-    select: 'neighborhood,price',
-    market: `eq.${currentMarket}`,
-    price:  'gte.500',
-    neighborhood: 'not.is.null',
-    limit:  '10000',
-  });
+async function loadNeighborhoods(){
+  const rows=await sbFetch({
+    select:'neighborhood,price',
+    market:`eq.${currentMarket}`,
+    limit:'10000',
+  },['price=gte.500','price=lte.20000','neighborhood=not.is.null']);
 
-  // Aggregate client-side
-  const hoods = {};
-  rows.forEach(r => {
-    if (!r.neighborhood || !r.price || r.price > 20000) return;
-    if (!hoods[r.neighborhood]) hoods[r.neighborhood] = { prices:[], name:r.neighborhood };
+  const hoods={};
+  rows.forEach(r=>{
+    if(!r.neighborhood) return;
+    if(!hoods[r.neighborhood]) hoods[r.neighborhood]={prices:[],name:r.neighborhood};
     hoods[r.neighborhood].prices.push(r.price);
   });
+  const sorted=Object.values(hoods).map(h=>({
+    name:h.name,count:h.prices.length,
+    avg_price:Math.round(h.prices.reduce((s,x)=>s+x,0)/h.prices.length),
+    min_price:Math.min(...h.prices),max_price:Math.max(...h.prices),
+  })).sort((a,b)=>b.count-a.count);
 
-  const sorted = Object.values(hoods)
-    .map(h => ({
-      name:      h.name,
-      count:     h.prices.length,
-      avg_price: Math.round(h.prices.reduce((s,x)=>s+x,0)/h.prices.length),
-      min_price: Math.min(...h.prices),
-      max_price: Math.max(...h.prices),
-    }))
-    .sort((a,b) => b.count - a.count);
-
-  const max   = sorted[0]?.count || 1;
-  const color = MARKETS[currentMarket].color;
-
-  document.getElementById('hood-list').innerHTML = sorted.slice(0,18).map(n => `
+  const max=sorted[0]?.count||1;
+  const color=MARKETS[currentMarket].color;
+  document.getElementById('hood-list').innerHTML=sorted.slice(0,18).map(n=>`
     <div class="hood-row">
       <span class="hood-name" title="${n.name}">${n.name}</span>
       <div class="hood-bar-wrap"><div class="hood-bar" style="width:${(n.count/max*100).toFixed(1)}%;background:${color}"></div></div>
       <span class="hood-count">${n.count}</span>
       <span class="hood-price">${fmt$(n.avg_price)}</span>
-    </div>
-  `).join('');
-
-  updateMap(sorted, color);
+    </div>`).join('');
+  updateMap(sorted,color);
 }
 
-// ── Map ───────────────────────────────────────────────────────────────────
-function initMap() {
-  const mc = MAP_CENTERS[currentMarket];
-  leafletMap  = L.map('map').setView(mc.center, mc.zoom);
-  markerLayer = L.layerGroup().addTo(leafletMap);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution:'&copy; OSM &copy; CARTO', subdomains:'abcd', maxZoom:19
+function initMap(){
+  const mc=MAP_CENTERS[currentMarket];
+  leafletMap=L.map('map').setView(mc.center,mc.zoom);
+  markerLayer=L.layerGroup().addTo(leafletMap);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OSM &copy; CARTO',subdomains:'abcd',maxZoom:19
   }).addTo(leafletMap);
-  const s = document.createElement('style');
-  s.textContent = `.dp .leaflet-popup-content-wrapper{background:#16181c;border:1px solid #2a2e36;border-radius:0;box-shadow:none;color:#e8ecf4}.dp .leaflet-popup-tip{background:#16181c}.dp .leaflet-popup-close-button{color:#7a8399!important}`;
+  const s=document.createElement('style');
+  s.textContent=`.dp .leaflet-popup-content-wrapper{background:#16181c;border:1px solid #2a2e36;border-radius:0;box-shadow:none;color:#e8ecf4}.dp .leaflet-popup-tip{background:#16181c}.dp .leaflet-popup-close-button{color:#7a8399!important}`;
   document.head.appendChild(s);
 }
 
-function updateMap(hoods, color) {
-  if (!leafletMap) return;
+function updateMap(hoods,color){
+  if(!leafletMap) return;
   markerLayer.clearLayers();
-  const max = hoods[0]?.count || 1;
-  for (const n of hoods.slice(0,30)) {
-    const coords = coordsFor(n.name);
-    if (!coords) continue;
-    L.circleMarker(coords, {
-      radius: 7+(n.count/max)*22, fillColor:color, color:'#0e0f11',
-      weight:1.5, opacity:.9, fillOpacity:.5
-    })
-    .bindPopup(`
-      <div style="font-family:'DM Mono',monospace;font-size:13px;line-height:1.6">
-        <strong style="color:${color}">${n.name}</strong><br>
-        Avg: <strong>${fmt$(n.avg_price)}</strong><br>
-        Range: ${fmt$(n.min_price)} – ${fmt$(n.max_price)}<br>
-        <span style="color:#7a8399">${n.count} listings</span>
-      </div>
-    `, {className:'dp'})
+  const max=hoods[0]?.count||1;
+  for(const n of hoods.slice(0,30)){
+    const coords=coordsFor(n.name);
+    if(!coords) continue;
+    L.circleMarker(coords,{radius:7+(n.count/max)*22,fillColor:color,color:'#0e0f11',weight:1.5,opacity:.9,fillOpacity:.5})
+    .bindPopup(`<div style="font-family:'DM Mono',monospace;font-size:13px;line-height:1.6"><strong style="color:${color}">${n.name}</strong><br>Avg: <strong>${fmt$(n.avg_price)}</strong><br>Range: ${fmt$(n.min_price)} – ${fmt$(n.max_price)}<br><span style="color:#7a8399">${n.count} listings</span></div>`,{className:'dp'})
     .addTo(markerLayer);
   }
 }
 
-// ── Charts ────────────────────────────────────────────────────────────────
-function rebuildBar(id, labels, values, color, label) {
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(document.getElementById(id), {
-    type:'bar',
-    data:{labels,datasets:[{label,data:values,backgroundColor:color+'55',borderColor:color,borderWidth:1,borderRadius:2}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:30}},y:{grid:{color:'#1e2128'}}}}
-  });
+function rebuildBar(id,labels,values,color,label){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{type:'bar',data:{labels,datasets:[{label,data:values,backgroundColor:color+'55',borderColor:color,borderWidth:1,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:30}},y:{grid:{color:'#1e2128'}}}}});
 }
-function rebuildLine(id, labels, values, color) {
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(document.getElementById(id), {
-    type:'line',
-    data:{labels,datasets:[{label:'Listings',data:values,borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:2,fill:true,tension:.3}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:40,autoSkip:true,maxTicksLimit:10}},y:{grid:{color:'#1e2128'}}}}
-  });
+function rebuildLine(id,labels,values,color){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets:[{label:'Listings',data:values,borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:2,fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:40,autoSkip:true,maxTicksLimit:10}},y:{grid:{color:'#1e2128'}}}}});
 }
 
-// ── Listings table ────────────────────────────────────────────────────────
-async function loadListings() {
-  const cat   = document.getElementById('f-cat').value;
-  const beds  = document.getElementById('f-beds').value;
-  const minP  = parseInt(document.getElementById('f-min').value) || 0;
-  const maxP  = parseInt(document.getElementById('f-max').value) || 20000;
+async function loadListings(){
+  const cat=document.getElementById('f-cat').value;
+  const beds=document.getElementById('f-beds').value;
+  const minP=parseInt(document.getElementById('f-min').value)||0;
+  const maxP=parseInt(document.getElementById('f-max').value)||20000;
 
-  const params = {
-    select: 'title,category,price,bedrooms,bathrooms,sqft,neighborhood,url,posted_date',
-    market: `eq.${currentMarket}`,
-    price:  `gte.${minP}`,
-    order:  'scraped_at.desc',
-    limit:  '200',
-  };
-  // Supabase PostgREST needs separate AND conditions
-  const extra = [`price=lte.${maxP}`];
-  if (cat !== 'all')  extra.push(`category=eq.${cat}`);
-  if (beds === '0')   extra.push('bedrooms=eq.0');
-  else if (beds === '4') extra.push('bedrooms=gte.4');
-  else if (beds !== 'all') extra.push(`bedrooms=eq.${beds}`);
+  const base={select:'title,category,price,bedrooms,bathrooms,sqft,neighborhood,url,posted_date',market:`eq.${currentMarket}`,order:'scraped_at.desc',limit:'200'};
+  const extra=[`price=gte.${minP}`,`price=lte.${maxP}`];
+  if(cat!=='all') extra.push(`category=eq.${cat}`);
+  if(beds==='0') extra.push('bedrooms=eq.0');
+  else if(beds==='4') extra.push('bedrooms=gte.4');
+  else if(beds!=='all') extra.push(`bedrooms=eq.${beds}`);
 
-  // Build URL manually for multi-filter
-  const url = new URL(`${SUPABASE_URL}/rest/v1/listings`);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.append(k,v));
-  extra.forEach(e => {
-    const [k,v] = e.split('=');
-    url.searchParams.append(k,v);
-  });
-
-  const res  = await fetch(url, { headers:{ apikey: SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}` }});
-  const rows = await res.json();
-
-  const tbody = document.getElementById('listings-body');
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="no-data">No listings match these filters.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = rows.map(r => `
+  const rows=await sbFetch(base,extra);
+  const tbody=document.getElementById('listings-body');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" class="no-data">No listings match.</td></tr>';return}
+  tbody.innerHTML=rows.map(r=>`
     <tr>
       <td><a href="${r.url||'#'}" target="_blank" class="truncate" title="${(r.title||'').replace(/"/g,"'")}">${r.title||'—'}</a></td>
-      <td><span class="cat-badge ${r.category}">${r.category}</span></td>
-      <td class="price-cell">${r.price ? fmt$(r.price) : '—'}</td>
+      <td><span class="cat-badge ${r.category}">${r.category==='room_rental'?'Room':r.category}</span></td>
+      <td class="price-cell">${r.price?fmt$(r.price):'—'}</td>
       <td>${r.bedrooms!=null?(r.bedrooms===0?'Studio':r.bedrooms+' BR'):'—'}</td>
       <td>${r.bathrooms!=null?r.bathrooms+' BA':'—'}</td>
       <td>${r.sqft?Number(r.sqft).toLocaleString():'—'}</td>
       <td>${r.neighborhood||'—'}</td>
       <td style="white-space:nowrap;color:var(--muted)">${r.posted_date||'—'}</td>
-    </tr>
-  `).join('');
+    </tr>`).join('');
 }
 
-document.addEventListener('DOMContentLoaded', () => { initMap(); loadAll(); });
+document.addEventListener('DOMContentLoaded',()=>{initMap();loadAll()});
 </script>
 </body>
 </html>

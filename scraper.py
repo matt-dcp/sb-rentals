@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """
 SB + Ojai Craigslist Rental Scraper
-Scrapes apartments/condos and houses daily from Santa Barbara and Ojai.
-Run manually or via cron: 0 7 * * * /usr/bin/python3 /path/to/scraper.py
+Writes to Supabase (Postgres) via REST API.
 """
 
 import requests
 from bs4 import BeautifulSoup
-import sqlite3
 import time
 import logging
 import re
+import os
+import json
+import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
-
-DB_PATH  = Path(__file__).parent / "rentals.db"
-LOG_PATH = Path(__file__).parent / "scraper.log"
 
 MARKETS = [
     {
@@ -32,6 +29,18 @@ MARKETS = [
     },
 ]
 
+# Neighborhoods that get promoted to their own market silo.
+# Checked against the lowercase neighborhood string from Craigslist.
+# Order matters — more specific patterns first.
+NEIGHBORHOOD_SILOS = [
+    ("isla_vista",  ["isla vista", "isla vista iv", "ucsb iv", "ucsb area", "iv "]),
+    ("goleta",      ["goleta", "noleta", "ellwood", "storke", "glen annie", "glenn annie"]),
+    ("carpinteria", ["carpinteria", "carpintería", "summerland"]),
+    ("solvang",     ["solvang", "ballard", "santa ynez", "los olivos"]),
+    ("buellton",    ["buellton"]),
+    ("lompoc",      ["lompoc", "vandenberg"]),
+]
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -45,42 +54,86 @@ MAX_PAGES     = 10
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_PATH),
-        logging.StreamHandler(),
-    ],
 )
 log = logging.getLogger(__name__)
 
 WORD_TO_NUM = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6}
 
+# ── Supabase config ───────────────────────────────────────────────────────
+SUPABASE_URL = "https://wzlccltlthlaguazgten.supabase.co"
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGNjbHRsdGhsYWd1YXpndGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc4ODMsImV4cCI6MjA4NzM1Mzg4M30.5KuGMYwAYGiK0UYDcHxgIjXAHd-s_v6gutigVIH_zZM")
 
-def init_db(conn):
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS listings (
-            id            TEXT PRIMARY KEY,
-            market        TEXT,
-            category      TEXT,
-            title         TEXT,
-            price         INTEGER,
-            bedrooms      REAL,
-            bathrooms     REAL,
-            sqft          INTEGER,
-            neighborhood  TEXT,
-            url           TEXT,
-            posted_date   TEXT,
-            scraped_at    TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_scraped ON listings(scraped_at);
-        CREATE INDEX IF NOT EXISTS idx_price   ON listings(price);
-        CREATE INDEX IF NOT EXISTS idx_market  ON listings(market);
-        CREATE INDEX IF NOT EXISTS idx_hood    ON listings(neighborhood);
-    """)
-    cols = [row[1] for row in conn.execute("PRAGMA table_info(listings)").fetchall()]
-    if "market" not in cols:
-        conn.execute("ALTER TABLE listings ADD COLUMN market TEXT DEFAULT 'santa_barbara'")
-        log.info("Migrated DB: added market column")
-    conn.commit()
+# ── Junk detection ────────────────────────────────────────────────────────
+# Listings that match any of these patterns are skipped entirely.
+JUNK_PATTERNS = [
+    # Housing wanted / seeking
+    r'\bwanted\b', r'\biso\b', r'looking for', r'housing needed', r'need(ing)? (a |)room',
+    r'seeking (a |)room', r'in search of', r'house sitter', r'need(s?) housing',
+    # Commercial / non-residential
+    r'office space', r'retail space', r'commercial (space|yard|zoned)',
+    r'warehouse', r'\bindustrial\b', r'lab(oratory)? (space|office)',
+    r'co-?working', r'storage (unit|space|facility|lot)',
+    r'self storage', r'parking space', r'carport', r'garage (space|for rent)',
+    # For sale / land
+    r'for sale', r'\bacres?\b', r'\blot\b.*\$[5-9]\d{4}', r'commercial zoned land',
+    # Misc junk
+    r'private money loan', r'scam alert', r'^free\b',
+    r'house sitter', r'vacation maint',
+    # Vehicles
+    r'\bcamper\b', r'\btrailer for rent\b', r'\brv (space|lot|storage)\b',
+]
+JUNK_RE = re.compile('|'.join(JUNK_PATTERNS), re.I)
+
+# ── Room rental detection ─────────────────────────────────────────────────
+# Listings that match are kept but categorized as 'room_rental'.
+ROOM_PATTERNS = [
+    r'\broom for rent\b', r'\broom(s)? (available|to rent|4 rent)\b',
+    r'\bprivate room\b', r'\bfurnished room\b', r'\broom in (a |)house\b',
+    r'\broom in (a |)(apt|apartment|condo)\b',
+    r'\bbedroom (for rent|available|to rent)\b',
+    r'\bprivate bedroom\b', r'\bmaster bedroom\b',
+    r'\bhousemate\b', r'\broommate wanted\b',
+    r'\bbed.?space\b', r'\bbunk (bed|room)\b',
+    r'\bsingle (room|bedroom)\b',
+    r'\bcorner room\b', r'\blarge room\b', r'\bspacious room\b',
+    r'\bmedium.sized (bedroom|room)\b',
+    r'\bfemale (to share|only|preferred)\b', r'\bmale (to share|only|preferred)\b',
+    r'\broom to (live|rent)\b',
+    r'individual bed.?space',
+    r'\bavail(able)? for (immediate|female|male|1 )',
+    r'\b(room|bedroom) (w/|with) (private|shared) bath\b',
+]
+ROOM_RE = re.compile('|'.join(ROOM_PATTERNS), re.I)
+
+
+def resolve_market(base_market, neighborhood):
+    """
+    For santa_barbara listings, check if the neighborhood string
+    maps to one of our silos. Returns the resolved market string.
+    """
+    if base_market != 'santa_barbara' or not neighborhood:
+        return base_market
+    nl = neighborhood.lower()
+    # Only reclassify if the neighborhood string unambiguously matches one silo
+    # (skip it if it mentions multiple cities)
+    multi_city = sum(
+        1 for silo, patterns in NEIGHBORHOOD_SILOS
+        if any(p in nl for p in patterns)
+    )
+    if multi_city > 1:
+        return 'santa_barbara'
+    for silo, patterns in NEIGHBORHOOD_SILOS:
+        if any(p in nl for p in patterns):
+            return silo
+    return base_market
+
+
+def is_junk(title):
+    return bool(JUNK_RE.search(title or ''))
+
+
+def is_room_rental(title):
+    return bool(ROOM_RE.search(title or ''))
 
 
 def parse_price(text):
@@ -89,38 +142,20 @@ def parse_price(text):
 
 
 def parse_beds_baths(s):
-    """
-    Comprehensive title parser. Catches all known Craigslist SB/Ojai formats:
-      2br/1ba  2BD/2BATH  2bed/1bath  2 bed 1 bath  2 bedroom 1 bathroom
-      4 BR  Studio  2.5 bath  2B+1B  2B/1B  2B2B  2x2  2 x1
-      1-Bed  1-Bedroom  One Bedroom  Three Bedroom  Two Bath
-      2/1  2/2  Duplex 2/1  3/2.5 Condo
-    """
     beds = baths = None
     if not s:
         return beds, baths
     sl = s.lower()
-
-    # ── Studio ──
     if re.search(r'\bstudio\b', sl):
         beds = 0.0
-
-    # ── Bedrooms ──
     if beds is None:
         bed_patterns = [
-            # Standard: 2br, 2bd, 2bdrm, 2bed, 2bedroom, 2bedrooms
             r'(\d+)\s*(?:br|bed(?:room)?s?|bd|bdrm)\b',
-            # Hyphenated: 1-bed, 2-bedroom, 1-Bed
             r'(\d+)-bed(?:room)?s?\b',
-            # Written out: One Bedroom, Three Bedrooms
             r'\b(one|two|three|four|five|six)\s*(?:-\s*)?bed(?:room)?s?\b',
-            # Shorthand combos: 2B+1B, 2B/1B (beds = first number before B)
             r'\b(\d)[Bb]\s*[+/]\s*\d[Bb]\b',
-            # Compact: 2B2B (beds = first digit)
             r'\b(\d)[Bb](\d)[Bb]\b',
-            # NxN format: 2x2, 2x1, 2 x1 (beds/baths)
             r'\b([1-5])\s*[xX]\s*[1-5]\b',
-            # Slash fraction with context: 2/1, 2/2 near housing words
             r'\b(\d)\s*/\s*\d\b(?=.{0,60}(?:furnished|duplex|condo|upgraded|utilities|rent|house|home|apt|unit))',
         ]
         for pat in bed_patterns:
@@ -129,14 +164,9 @@ def parse_beds_baths(s):
                 val = m.group(1)
                 beds = float(WORD_TO_NUM[val]) if val in WORD_TO_NUM else float(val)
                 break
-
-    # ── Bathrooms ──
     bath_patterns = [
-        # Standard: 1ba, 1bath, 1bathroom, 2.5 bath
         r'(\d+(?:\.\d+)?)\s*(?:ba|bath(?:room)?s?)\b',
-        # Hyphenated: 1-bath, 2-bathroom
         r'(\d+(?:\.\d+)?)-bath(?:room)?s?\b',
-        # Written: Two Bath
         r'\b(one|two|three|four)\s*(?:-\s*)?bath(?:room)?s?\b',
     ]
     for pat in bath_patterns:
@@ -145,7 +175,6 @@ def parse_beds_baths(s):
             val = m.group(1)
             baths = float(WORD_TO_NUM[val]) if val in WORD_TO_NUM else float(val)
             break
-
     return beds, baths
 
 
@@ -157,7 +186,7 @@ def parse_sqft(s):
     return None
 
 
-def scrape_page(session, url, market, category, base_url):
+def scrape_page(session, url, market, category):
     try:
         resp = session.get(url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
@@ -182,17 +211,37 @@ def scrape_page(session, url, market, category, base_url):
             if not post_id:
                 continue
 
-            price_el     = item.select_one(".price")
-            price        = parse_price(price_el.get_text(strip=True)) if price_el else None
+            # Skip junk entirely
+            if is_junk(title):
+                log.debug(f"Junk skipped: {title}")
+                continue
+
+            price_el = item.select_one(".price")
+            price    = parse_price(price_el.get_text(strip=True)) if price_el else None
+
+            # Skip listings with no price — universally junk
+            if not price:
+                log.debug(f"No-price skipped: {title}")
+                continue
             hood_el      = item.select_one(".location")
             neighborhood = hood_el.get_text(strip=True).title() if hood_el else None
-            beds, baths  = parse_beds_baths(title)
-            sqft         = parse_sqft(title)
+
+            # Resolve market silo from neighborhood
+            resolved_market = resolve_market(market, neighborhood)
+
+            # Detect room rentals — override category
+            if is_room_rental(title):
+                resolved_category = 'room_rental'
+            else:
+                resolved_category = category
+
+            beds, baths = parse_beds_baths(title)
+            sqft        = parse_sqft(title)
 
             results.append({
                 "id":           post_id,
-                "market":       market,
-                "category":     category,
+                "market":       resolved_market,
+                "category":     resolved_category,
                 "title":        title,
                 "price":        price,
                 "bedrooms":     beds,
@@ -209,12 +258,12 @@ def scrape_page(session, url, market, category, base_url):
     return results
 
 
-def scrape_category(session, market, category, search_url, base_url):
+def scrape_category(session, market, category, search_url):
     all_listings = []
     for page in range(MAX_PAGES):
         url      = f"{search_url}?start={page * 120}"
         log.info(f"  [{market}/{category}] page {page + 1}")
-        listings = scrape_page(session, url, market, category, base_url)
+        listings = scrape_page(session, url, market, category)
         if not listings:
             log.info(f"  [{market}/{category}] no more results")
             break
@@ -223,74 +272,61 @@ def scrape_category(session, market, category, search_url, base_url):
     return all_listings
 
 
-def upsert_listings(conn, listings):
-    inserted = skipped = 0
-    for l in listings:
-        try:
-            conn.execute("""
-                INSERT OR IGNORE INTO listings
-                    (id, market, category, title, price, bedrooms, bathrooms,
-                     sqft, neighborhood, url, posted_date, scraped_at)
-                VALUES
-                    (:id, :market, :category, :title, :price, :bedrooms, :bathrooms,
-                     :sqft, :neighborhood, :url, :posted_date, :scraped_at)
-            """, l)
-            if conn.execute("SELECT changes()").fetchone()[0]:
-                inserted += 1
-            else:
-                skipped += 1
-        except sqlite3.Error as e:
-            log.warning(f"DB error on {l.get('id')}: {e}")
-    conn.commit()
-    return inserted, skipped
-
-
-def backfill_bedrooms(conn):
-    """Re-parse bedroom/bath counts for existing listings that have NULL bedrooms."""
-    c = conn.cursor()
-    c.execute("SELECT id, title FROM listings WHERE bedrooms IS NULL AND title IS NOT NULL")
-    rows = c.fetchall()
-    updated = 0
-    for (lid, title) in rows:
-        beds, baths = parse_beds_baths(title)
-        if beds is not None or baths is not None:
-            c.execute(
-                "UPDATE listings SET bedrooms=?, bathrooms=? WHERE id=?",
-                (beds, baths, lid)
-            )
-            updated += 1
-    conn.commit()
-    log.info(f"Backfill: updated {updated} of {len(rows)} NULL-bedroom records")
-    return updated
+def supabase_upsert(records):
+    url  = f"{SUPABASE_URL}/rest/v1/listings"
+    data = json.dumps(records).encode('utf-8')
+    req  = urllib.request.Request(
+        url, data=data, method='POST',
+        headers={
+            'apikey':        SUPABASE_KEY,
+            'Authorization': f'Bearer {SUPABASE_KEY}',
+            'Content-Type':  'application/json',
+            'Prefer':        'resolution=ignore-duplicates,return=minimal',
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, None
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode('utf-8', errors='replace')
 
 
 def main():
     log.info("═" * 60)
     log.info("SB + Ojai Rental Scraper — starting")
 
-    conn    = sqlite3.connect(DB_PATH)
     session = requests.Session()
-    init_db(conn)
+    all_listings = []
 
-    # Backfill existing records first
-    log.info("Running bedroom backfill on existing data…")
-    backfill_bedrooms(conn)
-
-    total_inserted = total_skipped = 0
     for mkt in MARKETS:
-        market   = mkt["market"]
-        base_url = mkt["base_url"]
+        market = mkt["market"]
         log.info(f"Market: {market}")
         for category in ("apartments", "houses"):
-            listings = scrape_category(session, market, category, mkt[category], base_url)
+            listings = scrape_category(session, market, category, mkt[category])
             log.info(f"  Fetched {len(listings)} listings")
-            ins, skp = upsert_listings(conn, listings)
-            log.info(f"  Inserted: {ins}  |  Skipped: {skp}")
-            total_inserted += ins
-            total_skipped  += skp
+            all_listings.extend(listings)
 
-    conn.close()
-    log.info(f"Done. Inserted: {total_inserted}  |  Skipped: {total_skipped}")
+    # Summarize what we're about to insert
+    from collections import Counter
+    market_counts = Counter(l['market'] for l in all_listings)
+    cat_counts    = Counter(l['category'] for l in all_listings)
+    log.info(f"Total scraped: {len(all_listings)}")
+    log.info(f"By market: {dict(market_counts)}")
+    log.info(f"By category: {dict(cat_counts)}")
+
+    # Upload in batches of 50
+    BATCH = 50
+    inserted = errors = 0
+    for i in range(0, len(all_listings), BATCH):
+        batch = all_listings[i:i+BATCH]
+        status, err = supabase_upsert(batch)
+        if err:
+            errors += len(batch)
+            log.warning(f"Batch {i//BATCH+1} error ({status}): {err[:200]}")
+        else:
+            inserted += len(batch)
+
+    log.info(f"Done. Uploaded: {inserted}  Errors: {errors}")
     log.info("═" * 60)
 
 
