@@ -102,6 +102,8 @@
   .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:280px}
   .no-data{color:var(--muted);padding:20px;font-size:13px}
   .room-rental-note{background:#1a1520;border:1px solid #3a2a40;padding:12px 16px;color:#b08ac0;font-size:12px;margin-bottom:16px;display:none}
+  .scraper-alert{background:#1c1210;border:1px solid #5a2a20;border-left:3px solid var(--red);padding:14px 20px;color:#e07060;font-size:13px;margin-bottom:18px;display:none;line-height:1.6}
+  .scraper-alert strong{color:#f08070}
 </style>
 </head>
 <body>
@@ -141,6 +143,8 @@
 </div>
 
 <main>
+  <div id="scraper-alert" class="scraper-alert"></div>
+
   <div id="room-rental-note" class="room-rental-note">
     Room rentals (single rooms in shared homes) are visible in the table below but excluded from all stats, averages, and charts above.
   </div>
@@ -187,6 +191,11 @@
   <div class="card" style="margin-bottom:16px">
     <div class="card-title">New Listings Per Day <span>last 30 days</span></div>
     <div style="position:relative;height:180px"><canvas id="chart-time"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Listing Mix by Bedroom Count <span>current 30 days vs prior 30 days · excludes room rentals</span></div>
+    <div style="position:relative;height:240px"><canvas id="chart-brmix"></canvas></div>
   </div>
 
   <div class="card">
@@ -318,6 +327,34 @@ async function loadSummary(){
     order:'scraped_at.desc',
   });
 
+  // ── Scraper health check ──────────────────────────────────────────────
+  const alertEl=document.getElementById('scraper-alert');
+  const mostRecent=rows[0]?.scraped_at;
+  if(!rows.length||!mostRecent){
+    alertEl.style.display='block';
+    alertEl.innerHTML='<strong>⚠ No data available for this market.</strong> The scraper may not have run yet, or this market has no listings.';
+  } else {
+    const hoursSince=(Date.now()-new Date(mostRecent))/(1000*60*60);
+    const lastDate=mostRecent.slice(0,10);
+    // Count how many new listings came in on the most recent scrape date
+    const lastDayCount=rows.filter(r=>r.scraped_at?.slice(0,10)===lastDate).length;
+    // Get the typical daily count from prior 7 scrape days for comparison
+    const byday={};
+    rows.forEach(r=>{const d=r.scraped_at?.slice(0,10);if(d)byday[d]=(byday[d]||0)+1});
+    const priorDays=Object.entries(byday).sort((a,b)=>a[0]<b[0]?1:-1).slice(1,8);
+    const typicalCount=priorDays.length?Math.round(priorDays.reduce((s,[,n])=>s+n,0)/priorDays.length):null;
+
+    if(hoursSince>25){
+      alertEl.style.display='block';
+      alertEl.innerHTML=`<strong>⚠ Scraper may be broken.</strong> Last data received <strong>${Math.round(hoursSince)} hours ago</strong> (${lastDate}). Expected daily at 8am PST. Check GitHub Actions for errors.`;
+    } else if(typicalCount && lastDayCount < typicalCount * 0.3){
+      alertEl.style.display='block';
+      alertEl.innerHTML=`<strong>⚠ Unusually low listing count today.</strong> Got <strong>${lastDayCount}</strong> listings vs typical <strong>${typicalCount}</strong>. Craigslist HTML may have changed. Check GitHub Actions.`;
+    } else {
+      alertEl.style.display='none';
+    }
+  }
+
   if(!rows.length){
     document.getElementById('header-meta').textContent='No data yet for this market';
     ['kpi-total','kpi-avg','kpi-apt','kpi-house','kpi-days'].forEach(id=>document.getElementById(id).textContent='—');
@@ -376,6 +413,20 @@ async function loadSummary(){
   rows.forEach(r=>{const d=r.scraped_at?.slice(0,10);if(d)dc[d]=(dc[d]||0)+1});
   const days30=Object.keys(dc).sort().slice(-30);
   rebuildLine('chart-time',days30,days30.map(d=>dc[d]),color);
+
+  // ── Bedroom mix: current 30 days vs prior 30 days ──────────────────────
+  const allDates=Object.keys(dc).sort();
+  const cur30Dates=new Set(allDates.slice(-30));
+  const prior30Dates=new Set(allDates.slice(-60,-30));
+
+  const BR_LABELS=['Studio','1 BR','2 BR','3 BR','4+ BR'];
+  const BR_FILTERS=[r=>r.bedrooms===0,r=>r.bedrooms===1,r=>r.bedrooms===2,r=>r.bedrooms===3,r=>r.bedrooms>=4];
+
+  const realWithBeds=real.filter(r=>r.bedrooms!=null&&r.scraped_at);
+  const curCounts =BR_FILTERS.map(f=>realWithBeds.filter(r=>cur30Dates.has(r.scraped_at.slice(0,10))&&f(r)).length);
+  const priorCounts=BR_FILTERS.map(f=>realWithBeds.filter(r=>prior30Dates.has(r.scraped_at.slice(0,10))&&f(r)).length);
+
+  rebuildGroupedBar('chart-brmix', BR_LABELS, curCounts, priorCounts, color);
 }
 
 async function loadNeighborhoods(){
@@ -441,6 +492,91 @@ function rebuildBar(id,labels,values,color,label){
 function rebuildLine(id,labels,values,color){
   if(charts[id]) charts[id].destroy();
   charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets:[{label:'Listings',data:values,borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:2,fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2128'},ticks:{maxRotation:40,autoSkip:true,maxTicksLimit:10}},y:{grid:{color:'#1e2128'}}}}});
+}
+
+function rebuildGroupedBar(id, labels, curCounts, priorCounts, color){
+  if(charts[id]) charts[id].destroy();
+
+  // Compute % change labels shown above current bars
+  const deltas = curCounts.map((c,i)=>{
+    const p = priorCounts[i];
+    if(!p) return null;
+    return Math.round((c-p)/p*100);
+  });
+
+  // Custom plugin: draw delta labels above current bars
+  const deltaPlugin = {
+    id:'deltaLabels',
+    afterDatasetsDraw(chart){
+      const {ctx,data,scales:{x,y}}=chart;
+      const ds=chart.data.datasets[0]; // current period bars
+      chart.getDatasetMeta(0).data.forEach((bar,i)=>{
+        const d=deltas[i];
+        if(d==null) return;
+        const sign=d>0?'+':'';
+        const clr=d>0?'#6ecfa0':d<0?'#d46e6e':'#7a8399';
+        ctx.save();
+        ctx.font="bold 11px 'DM Mono',monospace";
+        ctx.fillStyle=clr;
+        ctx.textAlign='center';
+        ctx.fillText(`${sign}${d}%`, bar.x, bar.y-5);
+        ctx.restore();
+      });
+    }
+  };
+
+  charts[id]=new Chart(document.getElementById(id),{
+    type:'bar',
+    plugins:[deltaPlugin],
+    data:{
+      labels,
+      datasets:[
+        {
+          label:'Current 30 days',
+          data:curCounts,
+          backgroundColor:color+'99',
+          borderColor:color,
+          borderWidth:1,
+          borderRadius:2,
+        },
+        {
+          label:'Prior 30 days',
+          data:priorCounts,
+          backgroundColor:'#2a2e3699',
+          borderColor:'#4a5060',
+          borderWidth:1,
+          borderRadius:2,
+        },
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      layout:{padding:{top:24}},
+      plugins:{
+        legend:{
+          display:true,
+          position:'top',
+          align:'end',
+          labels:{color:'#7a8399',font:{size:11},boxWidth:12,padding:16}
+        },
+        tooltip:{
+          callbacks:{
+            afterBody:(items)=>{
+              const i=items[0]?.dataIndex;
+              const d=deltas[i];
+              if(d==null) return '';
+              return `Change: ${d>0?'+':''}${d}%`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{grid:{color:'#1e2128'}},
+        y:{grid:{color:'#1e2128'},ticks:{stepSize:1}}
+      }
+    }
+  });
 }
 
 async function loadListings(){
