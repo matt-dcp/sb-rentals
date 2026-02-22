@@ -3,22 +3,20 @@
 One-time re-classification of existing Supabase data.
 
 Applies current scraper logic to every row already in the database:
-  1. DELETE  rows with no price or price = 0 (junk)
-  2. DELETE  rows matching junk title patterns
-  3. UPDATE  category = 'room_rental' where title matches room patterns
-  4. UPDATE  market to correct neighborhood silo (goleta, isla_vista, etc.)
+  1. DELETE  rows with no price or price = 0
+  2. DELETE  rows with junk URL codes (off, prk, reb, reo, sbw, vac)
+  3. DELETE  rows matching junk title patterns
+  4. UPDATE  category = 'room_rental' for roo/sha URL codes or matching titles
+  5. UPDATE  category = 'houses' for hou URL codes or house-title-in-apa
+  6. UPDATE  market to correct neighborhood silo
 
 Safe to re-run — all operations are idempotent.
 """
 
-import urllib.request
-import urllib.error
-import urllib.parse
-import json
-import re
-import sys
+import urllib.request, urllib.error, urllib.parse
+import json, re, sys
+from collections import Counter
 
-# ── Credentials (hardcoded — same as scraper) ─────────────────────────────
 SUPABASE_URL = "https://wzlccltlthlaguazgten.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGNjbHRsdGhsYWd1YXpndGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc4ODMsImV4cCI6MjA4NzM1Mzg4M30.5KuGMYwAYGiK0UYDcHxgIjXAHd-s_v6gutigVIH_zZM"
 
@@ -29,7 +27,12 @@ HEADERS = {
     'Prefer':        'return=representation',
 }
 
-# ── Logic (mirrors scraper.py exactly) ───────────────────────────────────
+# ── Classification logic (mirrors scraper.py) ─────────────────────────────
+URL_CODE_JUNK      = {'off', 'prk', 'reb', 'reo', 'sbw', 'vac'}
+URL_CODE_ROOM      = {'roo', 'sha'}
+URL_CODE_HOUSES    = {'hou'}
+URL_CODE_APARTMENT = {'apa', 'sub'}
+
 JUNK_PATTERNS = [
     r'\bwanted\b', r'\biso\b', r'looking for', r'housing needed', r'need(ing)? (a |)room',
     r'seeking (a |)room', r'in search of', r'house sitter', r'need(s?) housing',
@@ -37,10 +40,10 @@ JUNK_PATTERNS = [
     r'warehouse', r'\bindustrial\b', r'lab(oratory)? (space|office)',
     r'co-?working', r'storage (unit|space|facility|lot)',
     r'self storage', r'parking space', r'carport', r'garage (space|for rent)',
-    r'for sale', r'\bacres?\b', r'\blot\b.*\$[5-9]\d{4}', r'commercial zoned land',
+    r'for sale', r'\bacres?\b', r'commercial zoned land',
     r'private money loan', r'scam alert', r'^free\b',
-    r'house sitter', r'vacation maint',
-    r'\bcamper\b', r'\btrailer for rent\b', r'\brv (space|lot|storage)\b',
+    r'vacation maint', r'\bcamper\b', r'\btrailer for rent\b',
+    r'\brv (space|lot|storage)\b',
 ]
 JUNK_RE = re.compile('|'.join(JUNK_PATTERNS), re.I)
 
@@ -56,12 +59,16 @@ ROOM_PATTERNS = [
     r'\bcorner room\b', r'\blarge room\b', r'\bspacious room\b',
     r'\bmedium.sized (bedroom|room)\b',
     r'\bfemale (to share|only|preferred)\b', r'\bmale (to share|only|preferred)\b',
-    r'\broom to (live|rent)\b',
-    r'individual bed.?space',
+    r'\broom to (live|rent)\b', r'individual bed.?space',
     r'\bavail(able)? for (immediate|female|male|1 )',
     r'\b(room|bedroom) (w/|with) (private|shared) bath\b',
 ]
 ROOM_RE = re.compile('|'.join(ROOM_PATTERNS), re.I)
+
+HOUSE_IN_APT_RE = re.compile(
+    r'\b(house|home|bungalow|cottage|duplex|townhome|townhouse|ranch|cabin|villa|estate)\b',
+    re.I
+)
 
 NEIGHBORHOOD_SILOS = [
     ("isla_vista",  ["isla vista", "isla vista iv", "ucsb iv", "ucsb area", "iv "]),
@@ -72,23 +79,23 @@ NEIGHBORHOOD_SILOS = [
     ("lompoc",      ["lompoc", "vandenberg"]),
 ]
 
-def resolve_market(neighborhood):
-    """Returns silo name or None if it stays in santa_barbara."""
+def url_code(url):
+    m = re.search(r'\.org/([a-z]+)/', url or '')
+    return m.group(1) if m else None
+
+def resolve_silo(neighborhood):
     if not neighborhood:
         return None
     nl = neighborhood.lower()
-    matched = [silo for silo, patterns in NEIGHBORHOOD_SILOS if any(p in nl for p in patterns)]
-    if len(matched) == 1:
-        return matched[0]
-    return None  # multi-city or no match → stay in santa_barbara
-
+    matched = [s for s, patterns in NEIGHBORHOOD_SILOS if any(p in nl for p in patterns)]
+    return matched[0] if len(matched) == 1 else None
 
 # ── Supabase helpers ──────────────────────────────────────────────────────
 def sb_request(method, path, body=None, params=None):
-    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    url  = f"{SUPABASE_URL}/rest/v1/{path}"
     if params:
         url += '?' + urllib.parse.urlencode(params, doseq=True)
-    data = json.dumps(body).encode('utf-8') if body else None
+    data = json.dumps(body).encode() if body else None
     req  = urllib.request.Request(url, data=data, method=method, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -98,73 +105,59 @@ def sb_request(method, path, body=None, params=None):
         return e.code, e.read().decode('utf-8', errors='replace')
 
 def fetch_all():
-    """Fetch all listings in pages of 1000."""
-    all_rows = []
-    offset   = 0
-    PAGE     = 1000
+    rows, offset = [], 0
     while True:
         status, data = sb_request('GET', 'listings', params={
-            'select': 'id,market,category,title,price,neighborhood',
-            'order':  'id',
-            'limit':  str(PAGE),
-            'offset': str(offset),
+            'select': 'id,market,category,title,price,neighborhood,url',
+            'order': 'id', 'limit': '1000', 'offset': str(offset),
         })
         if not isinstance(data, list) or not data:
             break
-        all_rows.extend(data)
-        if len(data) < PAGE:
+        rows.extend(data)
+        if len(data) < 1000:
             break
-        offset += PAGE
-    return all_rows
+        offset += 1000
+    return rows
 
 def delete_ids(ids, reason):
     if not ids:
+        print(f"  —    Deleted      0 rows — {reason}")
         return
-    # Supabase REST: DELETE with id=in.(a,b,c)
     id_list = ','.join(f'"{i}"' for i in ids)
-    status, resp = sb_request('DELETE', f'listings?id=in.({id_list})')
+    status, _ = sb_request('DELETE', f'listings?id=in.({id_list})')
     mark = '✓' if status in (200, 204) else f'ERROR {status}'
-    print(f"  {mark}  Deleted {len(ids):>4} rows — {reason}")
+    print(f"  {mark}  Deleted   {len(ids):>4} rows — {reason}")
 
-def update_rows(updates, field, reason):
-    """
-    updates: list of (id, new_value)
-    Groups by new_value and issues one PATCH per distinct value.
-    """
+def patch_field(updates, field, reason):
     if not updates:
+        print(f"  —    Updated      0 rows — {reason}")
         return
-    by_value = {}
+    by_val = {}
     for rid, val in updates:
-        by_value.setdefault(val, []).append(rid)
+        by_val.setdefault(val, []).append(rid)
     total = 0
-    for val, ids in by_value.items():
+    for val, ids in by_val.items():
         id_list = ','.join(f'"{i}"' for i in ids)
-        status, resp = sb_request(
-            'PATCH',
-            f'listings?id=in.({id_list})',
-            body={field: val}
-        )
+        status, resp = sb_request('PATCH', f'listings?id=in.({id_list})', body={field: val})
         if status in (200, 204):
             total += len(ids)
         else:
-            print(f"  ⚠️  PATCH error ({status}): {str(resp)[:200]}")
-    mark = '✓' if total else '⚠️'
-    print(f"  {mark}  Updated {total:>4} rows — {reason}")
-
+            print(f"  ⚠️   PATCH error ({status}): {str(resp)[:200]}")
+    print(f"  ✓   Updated   {total:>4} rows — {reason}")
 
 # ── Main ──────────────────────────────────────────────────────────────────
 def main():
     print("\n── Re-classification: Supabase Existing Data ────────────────")
-
-    print("Fetching all rows from Supabase…", end=" ", flush=True)
+    print("Fetching all rows…", end=" ", flush=True)
     rows = fetch_all()
     print(f"✓  ({len(rows):,} rows)")
 
-    # Categorize every row
     to_delete_no_price  = []
-    to_delete_junk      = []
+    to_delete_url_junk  = []
+    to_delete_title_junk = []
     to_room_rental      = []
-    to_resifo           = []   # (id, new_market)
+    to_houses           = []
+    to_resilo           = []
 
     for r in rows:
         rid   = r['id']
@@ -173,49 +166,64 @@ def main():
         hood  = r.get('neighborhood') or ''
         mkt   = r.get('market') or ''
         cat   = r.get('category') or ''
+        code  = url_code(r.get('url') or '')
 
-        # 1. No price → delete
         if not price:
             to_delete_no_price.append(rid)
             continue
-
-        # 2. Junk title → delete
+        if code in URL_CODE_JUNK:
+            to_delete_url_junk.append(rid)
+            continue
         if JUNK_RE.search(title):
-            to_delete_junk.append(rid)
+            to_delete_title_junk.append(rid)
             continue
 
-        # 3. Room rental detection (only if not already set)
-        if cat != 'room_rental' and ROOM_RE.search(title):
+        # Room rental
+        if cat != 'room_rental' and (code in URL_CODE_ROOM or ROOM_RE.search(title)):
             to_room_rental.append((rid, 'room_rental'))
+            continue  # don't also try to resilo room rentals
 
-        # 4. Neighborhood silo (only for santa_barbara listings)
+        # House correction
+        if cat == 'apartments':
+            if code in URL_CODE_HOUSES or HOUSE_IN_APT_RE.search(title):
+                to_houses.append((rid, 'houses'))
+
+        # Neighborhood silo (santa_barbara only)
         if mkt == 'santa_barbara':
-            silo = resolve_market(hood)
+            silo = resolve_silo(hood)
             if silo:
-                to_resifo.append((rid, silo))
+                to_resilo.append((rid, silo))
 
-    # Print preview before making any changes
+    # ── Preview ──
     print(f"\nPlan:")
-    print(f"  Delete — no price:    {len(to_delete_no_price):>4}")
-    print(f"  Delete — junk title:  {len(to_delete_junk):>4}")
-    print(f"  Update — room rental: {len(to_room_rental):>4}")
-    print(f"  Update — resilo mkt:  {len(to_resifo):>4}")
+    print(f"  Delete — no price:         {len(to_delete_no_price):>4}")
+    print(f"  Delete — junk URL code:    {len(to_delete_url_junk):>4}")
+    print(f"  Delete — junk title:       {len(to_delete_title_junk):>4}")
+    print(f"  Update — → room_rental:    {len(to_room_rental):>4}")
+    print(f"  Update — apt → houses:     {len(to_houses):>4}")
+    print(f"  Update — resilo market:    {len(to_resilo):>4}")
 
     if to_room_rental:
-        print(f"\n  Room rental titles (sample):")
-        ids_set = {rid for rid,_ in to_room_rental}
+        print(f"\n  Room rental samples:")
+        rm_ids = {rid for rid,_ in to_room_rental}
         for r in rows:
-            if r['id'] in ids_set:
-                print(f"    ${r.get('price','?'):>5}  {r.get('title','')[:70]}")
+            if r['id'] in rm_ids:
+                print(f"    ${r.get('price','?'):>5}  {r.get('title','')[:65]}")
 
-    if to_resifo:
-        print(f"\n  Resilo assignments (sample):")
-        ids_set = {rid for rid,_ in to_resifo}
-        silo_map = {rid: silo for rid, silo in to_resifo}
+    if to_houses:
+        print(f"\n  Apt → houses samples:")
+        h_ids = {rid for rid,_ in to_houses}
+        for r in rows:
+            if r['id'] in h_ids:
+                print(f"           {r.get('title','')[:65]}")
+
+    if to_resilo:
+        print(f"\n  Resilo samples (first 15):")
+        silo_map = {rid: silo for rid, silo in to_resilo}
         shown = 0
         for r in rows:
-            if r['id'] in ids_set and shown < 20:
-                print(f"    {silo_map[r['id']]:<15}  {r.get('neighborhood','')[:40]}")
+            if r['id'] in silo_map and shown < 15:
+                print(f"    → {silo_map[r['id']]:<14}  {r.get('neighborhood','')[:40]}")
                 shown += 1
 
     print()
@@ -225,26 +233,26 @@ def main():
         sys.exit(0)
 
     print("\nApplying…")
-    delete_ids(to_delete_no_price, "no price")
-    delete_ids(to_delete_junk,     "junk title")
-    update_rows(to_room_rental, 'category', "room_rental category")
-    update_rows(to_resifo,      'market',   "neighborhood silo")
+    delete_ids(to_delete_no_price,   "no price")
+    delete_ids(to_delete_url_junk,   "junk URL code (off/prk/reb/reo/sbw/vac)")
+    delete_ids(to_delete_title_junk, "junk title pattern")
+    patch_field(to_room_rental, 'category', "room_rental")
+    patch_field(to_houses,      'category', "apartments → houses")
+    patch_field(to_resilo,      'market',   "neighborhood silo")
 
-    # Final count
-    print("\nVerifying…", end=" ", flush=True)
-    status, data = sb_request('GET', 'listings', params={
-        'select': 'market',
-        'limit':  '10000',
-    })
+    # ── Verify ──
+    print("\nFinal counts…")
+    _, data = sb_request('GET', 'listings', params={'select': 'market,category', 'limit': '10000'})
     if isinstance(data, list):
-        from collections import Counter
-        counts = Counter(r['market'] for r in data)
-        print(f"✓  ({len(data):,} rows remain)\n")
-        print("  Rows by market:")
-        for mkt, cnt in sorted(counts.items()):
-            print(f"    {mkt:<20} {cnt:>4}")
-    else:
-        print("could not verify")
+        mkt_counts = Counter(r['market'] for r in data)
+        cat_counts = Counter(r['category'] for r in data)
+        print(f"\n  Total rows: {len(data):,}\n")
+        print("  By market:")
+        for k, v in sorted(mkt_counts.items()):
+            print(f"    {k:<20} {v:>4}")
+        print("\n  By category:")
+        for k, v in sorted(cat_counts.items()):
+            print(f"    {k:<20} {v:>4}")
 
     print("\n✅  Re-classification complete.")
     print("────────────────────────────────────────────────────────────\n")

@@ -51,6 +51,20 @@ HEADERS = {
 REQUEST_DELAY = 1.5
 MAX_PAGES     = 10
 
+# ── Craigslist URL category codes ─────────────────────────────────────────
+# The listing URL contains a 2-3 letter code: craigslist.org/CODE/d/...
+# This is more reliable than title pattern matching for primary classification.
+URL_CODE_JUNK      = {'off', 'prk', 'reb', 'reo', 'sbw', 'vac'}
+URL_CODE_ROOM      = {'roo', 'sha'}
+URL_CODE_HOUSES    = {'hou'}
+URL_CODE_APARTMENT = {'apa', 'sub'}
+
+# Title words that indicate a house even when posted in the apa category
+HOUSE_IN_APT_RE = re.compile(
+    r'\b(house|home|bungalow|cottage|duplex|townhome|townhouse|ranch|cabin|villa|estate)\b',
+    re.I
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(message)s",
@@ -203,17 +217,26 @@ def scrape_page(session, url, market, category):
             link_el  = item.select_one("a")
             post_url = link_el["href"] if link_el else None
 
-            post_id = None
+            post_id  = None
+            url_code = None
             if post_url:
                 m = re.search(r"/(\d+)\.html", post_url)
                 if m:
                     post_id = m.group(1)
+                c = re.search(r'\.org/([a-z]+)/', post_url)
+                if c:
+                    url_code = c.group(1)
             if not post_id:
                 continue
 
-            # Skip junk entirely
+            # URL code is the primary classification gate — more reliable than title matching
+            if url_code in URL_CODE_JUNK:
+                log.debug(f"URL-code junk skipped [{url_code}]: {title}")
+                continue
+
+            # Title-based junk filter catches anything the URL code misses
             if is_junk(title):
-                log.debug(f"Junk skipped: {title}")
+                log.debug(f"Title junk skipped: {title}")
                 continue
 
             price_el = item.select_one(".price")
@@ -223,17 +246,26 @@ def scrape_page(session, url, market, category):
             if not price:
                 log.debug(f"No-price skipped: {title}")
                 continue
+
             hood_el      = item.select_one(".location")
             neighborhood = hood_el.get_text(strip=True).title() if hood_el else None
 
             # Resolve market silo from neighborhood
             resolved_market = resolve_market(market, neighborhood)
 
-            # Detect room rentals — override category
-            if is_room_rental(title):
+            # Determine category — URL code takes precedence, then title inference
+            if url_code in URL_CODE_ROOM or is_room_rental(title):
                 resolved_category = 'room_rental'
+            elif url_code in URL_CODE_HOUSES:
+                resolved_category = 'houses'
+            elif url_code in URL_CODE_APARTMENT:
+                # Some landlords post houses in the apa category — detect by title
+                if HOUSE_IN_APT_RE.search(title or ''):
+                    resolved_category = 'houses'
+                else:
+                    resolved_category = 'apartments'
             else:
-                resolved_category = category
+                resolved_category = category  # fallback to search category passed in
 
             beds, baths = parse_beds_baths(title)
             sqft        = parse_sqft(title)
@@ -254,6 +286,7 @@ def scrape_page(session, url, market, category):
             })
         except Exception as e:
             log.debug(f"Parse error: {e}")
+
 
     return results
 
