@@ -1,0 +1,76 @@
+2026-02-22 08:12:58,140  INFO  ════════════════════════════════════════════════════════════
+2026-02-22 08:12:58,140  INFO  SB + Ojai Rental Scraper — starting
+2026-02-22 08:12:58,143  INFO  Market: santa_barbara
+2026-02-22 08:12:58,143  INFO    [santa_barbara/apartments] page 1
+2026-02-22 08:12:58,505  INFO    [santa_barbara/apartments] no more results
+2026-02-22 08:12:58,505  INFO    Fetched 0 listings
+2026-02-22 08:12:58,505  INFO    Inserted: 0  |  Skipped: 0
+2026-02-22 08:12:58,505  INFO    [santa_barbara/houses] page 1
+2026-02-22 08:12:58,747  INFO    [santa_barbara/houses] no more results
+2026-02-22 08:12:58,748  INFO    Fetched 0 listings
+2026-02-22 08:12:58,748  INFO    Inserted: 0  |  Skipped: 0
+2026-02-22 08:12:58,748  INFO  Market: ojai
+2026-02-22 08:12:58,748  INFO    [ojai/apartments] page 1
+2026-02-22 08:12:59,019  INFO    [ojai/apartments] no more results
+2026-02-22 08:12:59,019  INFO    Fetched 0 listings
+2026-02-22 08:12:59,019  INFO    Inserted: 0  |  Skipped: 0
+2026-02-22 08:12:59,019  INFO    [ojai/houses] page 1
+2026-02-22 08:12:59,191  INFO    [ojai/houses] no more results
+2026-02-22 08:12:59,191  INFO    Fetched 0 listings
+2026-02-22 08:12:59,191  INFO    Inserted: 0  |  Skipped: 0
+2026-02-22 08:12:59,191  INFO  Done. Inserted: 0  |  Skipped: 0
+2026-02-22 08:12:59,191  INFO  ════════════════════════════════════════════════════════════
+2026-02-22 08:16:28,370  INFO  ════════════════════════════════════════════════════════════
+2026-02-22 08:16:28,370  INFO  SB + Ojai Rental Scraper — starting
+2026-02-22 08:16:28,372  INFO  Market: santa_barbara
+2026-02-22 08:16:28,372  INFO    [santa_barbara/apartments] page 1
+2026-02-22 08:16:30,251  INFO    [santa_barbara/apartments] page 2
+2026-02-22 08:16:32,050  INFO    [santa_barbara/apartments] page 3
+2026-02-22 08:16:33,758  INFO    [santa_barbara/apartments] page 4
+2026-02-22 08:16:35,427  INFO    [santa_barbara/apartments] page 5
+2026-02-22 08:16:37,095  INFO    [santa_barbara/apartments] page 6
+2026-02-22 08:16:38,841  INFO    [santa_barbara/apartments] page 7
+2026-02-22 08:16:40,511  INFO    [santa_barbara/apartments] page 8
+2026-02-22 08:16:42,196  INFO    [santa_barbara/apartments] page 9
+2026-02-22 08:16:43,883  INFO    [santa_barbara/apartments] page 10
+2026-02-22 08:16:45,575  INFO    Fetched 3560 listings
+2026-02-22 08:16:45,607  INFO    Inserted: 356  |  Skipped: 3204
+2026-02-22 08:16:45,607  INFO    [santa_barbara/houses] page 1
+2026-02-22 08:16:47,479  INFO    [santa_barbara/houses] page 2
+2026-02-22 08:16:49,191  INFO    [santa_barbara/houses] page 3
+2026-02-22 08:16:50,935  INFO    [santa_barbara/houses] page 4
+2026-02-22 08:16:52,621  INFO    [santa_barbara/houses] page 5
+2026-02-22 08:16:54,317  INFO    [santa_barbara/houses] page 6
+2026-02-22 08:16:56,023  INFO    [santa_barbara/houses] page 7
+2026-02-22 08:16:57,831  INFO    [santa_barbara/houses] page 8
+2026-02-22 08:16:59,532  INFO    [santa_barbara/houses] page 9
+2026-02-22 08:17:01,232  INFO    [santa_barbara/houses] page 10
+2026-02-22 08:17:03,028  INFO    Fetched 3320 listings
+2026-02-22 08:17:03,070  INFO    Inserted: 97  |  Skipped: 3223
+2026-02-22 08:17:03,070  INFO  Market: ojai
+2026-02-22 08:17:03,070  INFO    [ojai/apartments] page 1
+2026-02-22 08:17:04,851  INFO    [ojai/apartments] page 2
+2026-02-22 08:17:06,468  INFO    [ojai/apartments] page 3
+2026-02-22 08:17:08,162  INFO    [ojai/apartments] page 4
+2026-02-22 08:17:09,835  INFO    [ojai/apartments] page 5
+2026-02-22 08:17:11,463  INFO    [ojai/apartments] page 6
+2026-02-22 08:17:13,087  INFO    [ojai/apartments] page 7
+2026-02-22 08:17:14,699  INFO    [ojai/apartments] page 8
+2026-02-22 08:17:16,313  INFO    [ojai/apartments] page 9
+2026-02-22 08:17:17,925  INFO    [ojai/apartments] page 10
+2026-02-22 08:17:19,539  INFO    Fetched 250 listings
+2026-02-22 08:17:19,546  INFO    Inserted: 23  |  Skipped: 227
+2026-02-22 08:17:19,546  INFO    [ojai/houses] page 1
+2026-02-22 08:17:21,168  INFO    [ojai/houses] page 2
+2026-02-22 08:17:22,849  INFO    [ojai/houses] page 3
+2026-02-22 08:17:24,495  INFO    [ojai/houses] page 4
+2026-02-22 08:17:26,114  INFO    [ojai/houses] page 5
+2026-02-22 08:17:27,740  INFO    [ojai/houses] page 6
+2026-02-22 08:17:29,363  INFO    [ojai/houses] page 7
+2026-02-22 08:17:30,993  INFO    [ojai/houses] page 8
+2026-02-22 08:17:32,621  INFO    [ojai/houses] page 9
+2026-02-22 08:17:34,246  INFO    [ojai/houses] page 10
+2026-02-22 08:17:35,960  INFO    Fetched 500 listings
+2026-02-22 08:17:35,975  INFO    Inserted: 24  |  Skipped: 476
+2026-02-22 08:17:35,977  INFO  Done. Inserted: 500  |  Skipped: 7130
+2026-02-22 08:17:35,977  INFO  ════════════════════════════════════════════════════════════
