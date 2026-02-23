@@ -440,17 +440,9 @@ async function loadSummary(){
   } else {
     const mostRecent=rows[0].scraped_at;
     const hoursSince=(Date.now()-new Date(mostRecent))/(3600000);
-    const byday={};
-    rows.forEach(r=>{const d=r.scraped_at?.slice(0,10);if(d)byday[d]=(byday[d]||0)+1});
-    const prior7=Object.entries(byday).sort((a,b)=>a[0]<b[0]?1:-1).slice(1,8);
-    const typical=prior7.length?Math.round(prior7.reduce((s,[,n])=>s+n,0)/prior7.length):null;
-    const todayCount=byday[mostRecent?.slice(0,10)]||0;
     if(hoursSince>30){
       alertEl.style.display='block';
       alertEl.innerHTML=`<strong>⚠ Scraper may be broken.</strong> Last data: <strong>${Math.round(hoursSince)}h ago</strong>. Check <a href="https://github.com/matt-dcp/sb-rentals/actions" target="_blank" style="color:var(--red)">GitHub Actions</a>.`;
-    } else if(typical&&todayCount<typical*0.3){
-      alertEl.style.display='block';
-      alertEl.innerHTML=`<strong>⚠ Unusually low listing count today</strong> (${todayCount} vs typical ${typical}). Craigslist structure may have changed. Check <a href="https://github.com/matt-dcp/sb-rentals/actions" target="_blank" style="color:var(--red)">GitHub Actions</a>.`;
     } else {
       alertEl.style.display='none';
     }
