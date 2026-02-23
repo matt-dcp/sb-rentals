@@ -445,7 +445,7 @@ async function loadSummary(){
     const prior7=Object.entries(byday).sort((a,b)=>a[0]<b[0]?1:-1).slice(1,8);
     const typical=prior7.length?Math.round(prior7.reduce((s,[,n])=>s+n,0)/prior7.length):null;
     const todayCount=byday[mostRecent?.slice(0,10)]||0;
-    if(hoursSince>25){
+    if(hoursSince>30){
       alertEl.style.display='block';
       alertEl.innerHTML=`<strong>⚠ Scraper may be broken.</strong> Last data: <strong>${Math.round(hoursSince)}h ago</strong>. Check <a href="https://github.com/matt-dcp/sb-rentals/actions" target="_blank" style="color:var(--red)">GitHub Actions</a>.`;
     } else if(typical&&todayCount<typical*0.3){
