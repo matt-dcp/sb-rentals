@@ -12,6 +12,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Disable IPv6
+        run: sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -20,44 +23,13 @@ jobs:
       - name: Install dependencies
         run: pip install psycopg2-binary
 
-      - name: Force IPv4 for Supabase
-        run: |
-          # Resolve Supabase DB host to IPv4 and add to /etc/hosts
-          HOST=$(echo "$SUPABASE_DB_URL" | python3 -c "import sys,urllib.parse; print(urllib.parse.urlparse(sys.stdin.read().strip()).hostname)")
-          IPV4=$(dig +short A "$HOST" | head -1)
-          if [ -n "$IPV4" ]; then
-            echo "$IPV4 $HOST" | sudo tee -a /etc/hosts
-            echo "Mapped $HOST → $IPV4"
-          else
-            echo "Could not resolve IPv4 for $HOST, trying pooler..."
-            # Try the Supabase connection pooler (IPv4 compatible)
-            POOLER_HOST=$(echo "$HOST" | sed 's/^db\./aws-0-us-west-1.pooler.supabase.com/')
-            echo "Will try direct connection anyway"
-          fi
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-
       - name: Run migration
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           python3 << 'PYEOF'
-          import psycopg2, os, urllib.parse
-
-          db_url = os.environ['SUPABASE_DB_URL']
-
-          # Try direct connection first, then pooler if it fails
-          try:
-              conn = psycopg2.connect(db_url, connect_timeout=10)
-          except Exception as e:
-              print(f"Direct connection failed: {e}")
-              # Try swapping to pooler endpoint
-              parsed = urllib.parse.urlparse(db_url)
-              pooler_host = parsed.hostname.replace('db.', 'aws-0-us-west-1.pooler.supabase.com')
-              pooler_url = db_url.replace(parsed.hostname, pooler_host).replace(':5432', ':6543')
-              print(f"Trying pooler at {pooler_host}...")
-              conn = psycopg2.connect(pooler_url, connect_timeout=10)
-
+          import psycopg2, os
+          conn = psycopg2.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=15)
           conn.autocommit = True
           cur = conn.cursor()
           with open('migrations/002_price_tracking.sql') as f:
