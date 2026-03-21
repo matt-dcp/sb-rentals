@@ -53,6 +53,11 @@ main{padding:28px 36px;width:100%}
 .kpi-label{color:var(--muted);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;margin-bottom:5px}
 .kpi-value{font-size:1.75rem;color:var(--bright);font-family:var(--serif);line-height:1.1}
 .kpi-sub{color:var(--muted);font-size:11px;margin-top:4px}
+.kpi-trend{position:absolute;right:14px;top:50%;transform:translateY(-50%);text-align:right;display:none}
+.kpi-trend.visible{display:block}
+.kpi-trend svg{display:block;margin-bottom:3px;margin-left:auto}
+.kpi-delta{font-size:11px;font-family:var(--mono);letter-spacing:0.3px}
+.kpi-delta.up{color:var(--green)}.kpi-delta.down{color:var(--red)}.kpi-delta.flat{color:var(--muted)}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
@@ -173,11 +178,11 @@ const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 
 <!-- KPIs -->
 <div class="kpi-row">
-  <div class="kpi">        <div class="kpi-label">Active Listings</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">excl. room rentals</div></div>
-  <div class="kpi blue">  <div class="kpi-label">Overall Median</div><div class="kpi-value" id="kpi-avg">—</div>  <div class="kpi-sub">asking price</div></div>
-  <div class="kpi">        <div class="kpi-label">Apts Median</div>   <div class="kpi-value" id="kpi-apt">—</div>  <div class="kpi-sub">apartments</div></div>
-  <div class="kpi green"> <div class="kpi-label">Houses Median</div> <div class="kpi-value" id="kpi-house">—</div><div class="kpi-sub">houses</div></div>
-  <div class="kpi orange"><div class="kpi-label">Avg Days Listed</div><div class="kpi-value" id="kpi-dom">—</div> <div class="kpi-sub">active listings</div></div>
+  <div class="kpi">        <div class="kpi-label">Active Listings</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">excl. room rentals</div><div class="kpi-trend" id="trend-total"></div></div>
+  <div class="kpi blue">  <div class="kpi-label">Overall Median</div><div class="kpi-value" id="kpi-avg">—</div>  <div class="kpi-sub">asking price</div><div class="kpi-trend" id="trend-avg"></div></div>
+  <div class="kpi">        <div class="kpi-label">Apts Median</div>   <div class="kpi-value" id="kpi-apt">—</div>  <div class="kpi-sub">apartments</div><div class="kpi-trend" id="trend-apt"></div></div>
+  <div class="kpi green"> <div class="kpi-label">Houses Median</div> <div class="kpi-value" id="kpi-house">—</div><div class="kpi-sub">houses</div><div class="kpi-trend" id="trend-house"></div></div>
+  <div class="kpi orange"><div class="kpi-label">Avg Days Listed</div><div class="kpi-value" id="kpi-dom">—</div> <div class="kpi-sub">active listings</div><div class="kpi-trend" id="trend-dom"></div></div>
 </div>
 
 <!-- Map + Neighborhoods -->
@@ -218,7 +223,7 @@ const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 <!-- Absorption + Price Distribution -->
 <div class="grid-2">
   <div class="card">
-    <div class="card-title">Absorption Rate <span>new listings vs removed · ratio &gt;1 = tightening</span></div>
+    <div class="card-title">Absorption Rate <span>new listings vs removed · ratio &lt;1 = tightening · &gt;1 = loosening</span></div>
     <div id="absorption-list"><div class="no-data">Loading…</div></div>
     <div class="data-age-note" id="absorption-note"></div>
   </div>
@@ -531,6 +536,52 @@ async function loadSummary(){
   rebuildGroupedBar('chart-brmix',BR_LABELS,curC,priorC,color);
 }
 
+// ── KPI trend sparklines ─────────────────────────────────────────────────
+function updateKpiTrends(snaps){
+  // Extract time series for each KPI from snapshot data
+  // category='all', bedrooms=null → totals row
+  const totals=snaps.filter(s=>s.category==='all'&&s.bedrooms===null).sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+  const apts=snaps.filter(s=>s.category==='apartments'&&s.bedrooms===null).sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+  const houses=snaps.filter(s=>s.category==='houses'&&s.bedrooms===null).sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+
+  renderKpiTrend('trend-total',totals.map(s=>s.listing_count),'var(--accent)');
+  renderKpiTrend('trend-avg',totals.map(s=>s.median_price),'var(--blue)');
+  renderKpiTrend('trend-apt',apts.map(s=>s.median_price),'var(--accent)');
+  renderKpiTrend('trend-house',houses.map(s=>s.median_price),'var(--green)');
+  renderKpiTrend('trend-dom',totals.map(s=>s.avg_dom_removed),'#d4944b');
+}
+
+function renderKpiTrend(elId,values,color){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  const vals=values.filter(v=>v!=null&&v>0);
+  if(vals.length<3){el.classList.remove('visible');return;}
+
+  // Sparkline dimensions
+  const W=56,H=22;
+  const min=Math.min(...vals),max=Math.max(...vals);
+  const range=max-min||1;
+  const pts=vals.map((v,i)=>{
+    const x=(i/(vals.length-1))*W;
+    const y=H-((v-min)/range)*H;
+    return`${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const svg=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="${pts.join(' ')}" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" fill="none" opacity="0.8"/></svg>`;
+
+  // Delta: compare last value to value ~30 days ago (or earliest available)
+  const current=vals[vals.length-1];
+  const compareIdx=Math.max(0,vals.length-31);
+  const previous=vals[compareIdx];
+  const pctChange=((current-previous)/previous)*100;
+  const absChange=Math.abs(pctChange);
+  const arrow=pctChange>0.5?'▲':pctChange<-0.5?'▼':'—';
+  const cls=pctChange>0.5?'up':pctChange<-0.5?'down':'flat';
+  const label=absChange<0.5?'flat':absChange>99?Math.round(absChange)+'%':absChange.toFixed(1)+'%';
+
+  el.innerHTML=svg+`<div class="kpi-delta ${cls}">${arrow} ${label}</div>`;
+  el.classList.add('visible');
+}
+
 // ── Snapshots: trend + absorption ────────────────────────────────────────
 async function loadSnapshots(){
   // Fetch last 90 days of snapshots for this market
@@ -544,6 +595,9 @@ async function loadSnapshots(){
   });
 
   trendDataCache=snaps;
+
+  // KPI trend sparklines
+  updateKpiTrends(snaps);
 
   // Absorption (last 30 days, category=all)
   const absData=snaps.filter(s=>s.category==='all'&&s.bedrooms!=null);
@@ -581,7 +635,7 @@ function buildAbsorption(snaps){
 
   const maxVal=Math.max(...rows.flatMap(r=>[r.newT,r.remT]),1);
   document.getElementById('absorption-list').innerHTML=rows.map(r=>{
-    const ratioCls=r.ratio==null?'ratio-bal':r.ratio>1.1?'ratio-tight':r.ratio<0.9?'ratio-loose':'ratio-bal';
+    const ratioCls=r.ratio==null?'ratio-bal':r.ratio<0.9?'ratio-tight':r.ratio>1.1?'ratio-loose':'ratio-bal';
     const ratioTxt=r.ratio!=null?r.ratio.toFixed(2):'—';
     const newW=(r.newT/maxVal*100).toFixed(1);
     const remW=(r.remT/maxVal*100).toFixed(1);
