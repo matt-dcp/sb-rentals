@@ -268,47 +268,136 @@ def scrape_all(session, today_str):
     return all_listings
 
 
-# ── Supabase upsert with first_seen/last_seen logic ───────────────────────
+# ── Title similarity for repost detection ─────────────────────────────────
+def normalize_title(title):
+    """Normalize title for comparison: lowercase, strip prices/numbers, common words."""
+    if not title:
+        return ''
+    t = title.lower()
+    t = re.sub(r'\$[\d,]+', '', t)           # strip prices
+    t = re.sub(r'\b\d{4,}\b', '', t)         # strip long numbers (IDs, zip codes)
+    t = re.sub(r'[^\w\s]', ' ', t)           # punctuation → spaces
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
+def title_similarity(a, b):
+    """Word overlap similarity between two titles (Jaccard index)."""
+    if not a or not b:
+        return 0.0
+    wa = set(normalize_title(a).split())
+    wb = set(normalize_title(b).split())
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / len(wa | wb)
+
+
+# ── Supabase upsert with price tracking ───────────────────────────────────
 def upsert_listings(listings, today_str):
     """
-    For new listings: INSERT with first_seen=today, last_seen=today.
-    For existing listings: UPDATE last_seen=today, price (in case it changed).
-    Uses Supabase upsert with ON CONFLICT DO UPDATE.
+    For new listings: INSERT with first_seen=today, last_seen=today, original_price=price.
+    For existing listings: detect price changes, update last_seen + price.
+    For new listings: detect probable reposts of recently-removed listings.
     """
     if not listings:
         return 0
 
-    # Supabase upsert: on conflict (id), update last_seen and price only.
-    # first_seen is preserved because we don't include it in the on-conflict update.
-    # We achieve this by doing the upsert in two passes:
-    # Pass 1: INSERT new rows (ignore conflicts)
-    # Pass 2: UPDATE last_seen for all seen IDs
-
     BATCH = 50
-    total = 0
+    by_id = {l['id']: l for l in listings}
+    all_ids = list(by_id.keys())
 
-    # Pass 1: insert new rows (first_seen + last_seen both set to today)
+    # ── Fetch existing listings to detect price changes ──────────────────
+    existing = {}  # id → {price, market, category, bedrooms, title}
+    for i in range(0, len(all_ids), 100):
+        chunk = all_ids[i:i+100]
+        id_list = ','.join(f'"{x}"' for x in chunk)
+        url = f"{SUPABASE_URL}/rest/v1/listings?id=in.({id_list})&select=id,price,market,category,bedrooms,title"
+        req = urllib.request.Request(url, headers=SB_HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                for row in json.loads(resp.read()):
+                    existing[row['id']] = row
+        except urllib.error.HTTPError as e:
+            log.warning(f"Fetch existing error {e.code}: {e.read().decode()[:200]}")
+
+    new_ids = [lid for lid in all_ids if lid not in existing]
+    existing_ids = [lid for lid in all_ids if lid in existing]
+    log.info(f"  New: {len(new_ids)}, Existing: {len(existing_ids)}")
+
+    # ── Detect price changes on existing listings ────────────────────────
+    price_changes = []
+    for lid in existing_ids:
+        old_price = existing[lid].get('price')
+        new_price = by_id[lid]['price']
+        if old_price and new_price and old_price != new_price:
+            pct = round(((new_price - old_price) / old_price) * 100, 2)
+            price_changes.append({
+                'listing_id': lid,
+                'market': by_id[lid]['market'],
+                'category': by_id[lid].get('category'),
+                'bedrooms': by_id[lid].get('bedrooms'),
+                'old_price': old_price,
+                'new_price': new_price,
+                'change_pct': pct,
+                'change_date': today_str,
+                'title': by_id[lid].get('title'),
+            })
+
+    if price_changes:
+        log.info(f"  Price changes detected: {len(price_changes)}")
+        for pc in price_changes[:5]:
+            log.info(f"    {pc['listing_id']}: ${pc['old_price']} → ${pc['new_price']} ({pc['change_pct']:+.1f}%)")
+        for i in range(0, len(price_changes), BATCH):
+            batch = price_changes[i:i+BATCH]
+            req = urllib.request.Request(
+                f"{SUPABASE_URL}/rest/v1/price_changes",
+                data=json.dumps(batch).encode(), method='POST',
+                headers={**SB_HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal'}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    pass
+            except urllib.error.HTTPError as e:
+                log.warning(f"Price change insert error {e.code}: {e.read().decode()[:200]}")
+
+    # ── Pass 1: INSERT new rows ──────────────────────────────────────────
     for i in range(0, len(listings), BATCH):
         batch = listings[i:i+BATCH]
-        data  = json.dumps(batch).encode()
-        req   = urllib.request.Request(
+        # Set original_price on all rows; only matters for new inserts
+        for row in batch:
+            row['original_price'] = row['price']
+        data = json.dumps(batch).encode()
+        req = urllib.request.Request(
             f"{SUPABASE_URL}/rest/v1/listings",
             data=data, method='POST',
             headers={**SB_HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal'}
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                total += len(batch)
+                pass
         except urllib.error.HTTPError as e:
             log.warning(f"Insert batch error {e.code}: {e.read().decode()[:200]}")
 
-    # Pass 2: update last_seen + price for all seen IDs
-    ids = [l['id'] for l in listings]
-    for i in range(0, len(ids), 100):
-        chunk   = ids[i:i+100]
+    # ── Pass 2: UPDATE existing listings (last_seen + price) ─────────────
+    # Update price individually only for listings whose price changed
+    changed_ids = {pc['listing_id'] for pc in price_changes}
+    for lid in changed_ids:
+        listing = by_id[lid]
+        patch = {"last_seen": today_str, "price": listing['price']}
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/listings?id=eq.{lid}",
+            data=json.dumps(patch).encode(), method='PATCH',
+            headers={**SB_HEADERS, 'Prefer': 'return=minimal'}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                pass
+        except urllib.error.HTTPError as e:
+            log.warning(f"Price update error {lid}: {e.code}")
+
+    # Bulk-update last_seen for all seen IDs
+    for i in range(0, len(all_ids), 100):
+        chunk = all_ids[i:i+100]
         id_list = ','.join(f'"{x}"' for x in chunk)
-        # Build price updates individually isn't practical via REST; 
-        # update last_seen in bulk, price will self-correct on next full match
         req = urllib.request.Request(
             f"{SUPABASE_URL}/rest/v1/listings?id=in.({id_list})",
             data=json.dumps({"last_seen": today_str}).encode(),
@@ -319,10 +408,106 @@ def upsert_listings(listings, today_str):
             with urllib.request.urlopen(req, timeout=30) as resp:
                 pass
         except urllib.error.HTTPError as e:
-            log.warning(f"last_seen update error {e.code}: {e.read().decode()[:200]}")
+            log.warning(f"Bulk last_seen update error {e.code}: {e.read().decode()[:200]}")
 
-    log.info(f"Upsert complete: {len(listings)} listings processed")
-    return total
+    # ── Repost detection for new listings ────────────────────────────────
+    detect_reposts(new_ids, by_id, today_str)
+
+    log.info(f"Upsert complete: {len(listings)} listings ({len(new_ids)} new, {len(existing_ids)} updated, {len(price_changes)} price changes)")
+    return len(listings)
+
+
+def detect_reposts(new_ids, by_id, today_str):
+    """
+    For each new listing, look for recently-removed listings with matching
+    market + bedrooms and similar title. If found, log as a probable repost.
+    """
+    if not new_ids:
+        return
+
+    # Group new listings by market for efficient querying
+    by_market = defaultdict(list)
+    for lid in new_ids:
+        by_market[by_id[lid]['market']].append(lid)
+
+    # Look back 7 days for removed listings
+    cutoff = (date.fromisoformat(today_str) - timedelta(days=7)).isoformat()
+
+    reposts = []
+    for market, lids in by_market.items():
+        # Fetch recently-removed listings in this market
+        url = (f"{SUPABASE_URL}/rest/v1/listings"
+               f"?select=id,title,price,bedrooms,market,category"
+               f"&market=eq.{market}"
+               f"&last_seen=gte.{cutoff}"
+               f"&last_seen=lt.{today_str}"
+               f"&limit=1000")
+        req = urllib.request.Request(url, headers=SB_HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                removed = json.loads(resp.read())
+        except Exception as e:
+            log.warning(f"Repost fetch error for {market}: {e}")
+            continue
+
+        if not removed:
+            continue
+
+        # Index removed by bedrooms for faster matching
+        removed_by_br = defaultdict(list)
+        for r in removed:
+            removed_by_br[r.get('bedrooms')].append(r)
+
+        for lid in lids:
+            new_listing = by_id[lid]
+            br = new_listing.get('bedrooms')
+            candidates = removed_by_br.get(br, [])
+
+            for old in candidates:
+                sim = title_similarity(new_listing.get('title'), old.get('title'))
+                if sim < 0.5:
+                    continue
+
+                old_price = old.get('price')
+                new_price = new_listing.get('price')
+                price_chg = (new_price - old_price) if old_price and new_price else None
+                price_pct = round((price_chg / old_price) * 100, 2) if price_chg and old_price else None
+
+                reposts.append({
+                    'original_id': old['id'],
+                    'repost_id': lid,
+                    'market': market,
+                    'bedrooms': br,
+                    'original_price': old_price,
+                    'repost_price': new_price,
+                    'price_change': price_chg,
+                    'price_change_pct': price_pct,
+                    'title_similarity': round(sim, 3),
+                    'original_title': old.get('title'),
+                    'repost_title': new_listing.get('title'),
+                    'detected_date': today_str,
+                })
+                break  # best match only
+
+    if reposts:
+        log.info(f"  Probable reposts detected: {len(reposts)}")
+        for rp in reposts[:5]:
+            direction = f"${rp['original_price']}→${rp['repost_price']}" if rp['price_change'] else "same price"
+            log.info(f"    {rp['original_id']}→{rp['repost_id']}: {direction} (sim={rp['title_similarity']:.2f})")
+
+        BATCH = 50
+        for i in range(0, len(reposts), BATCH):
+            batch = reposts[i:i+BATCH]
+            req = urllib.request.Request(
+                f"{SUPABASE_URL}/rest/v1/reposts",
+                data=json.dumps(batch).encode(), method='POST',
+                headers={**SB_HEADERS, 'Prefer': 'resolution=ignore-duplicates,return=minimal'}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    pass
+            except urllib.error.HTTPError as e:
+                log.warning(f"Repost insert error {e.code}: {e.read().decode()[:200]}")
 
 
 # ── Daily snapshot computation ────────────────────────────────────────────
