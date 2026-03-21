@@ -38,6 +38,10 @@ main{padding:28px 36px;width:100%}
 
 .scraper-alert{background:#1c1210;border:1px solid #5a2a20;border-left:3px solid var(--red);padding:14px 20px;color:#e07060;font-size:13px;margin-bottom:18px;display:none;line-height:1.6}
 .scraper-alert strong{color:#f08070}
+.market-narrative{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);padding:16px 20px;margin-bottom:16px;display:none;line-height:1.7;font-size:13px;color:var(--text)}
+.market-narrative.visible{display:block}
+.market-narrative strong{color:var(--bright)}
+.market-narrative .narrative-label{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .room-rental-note{background:#1a1520;border:1px solid #3a2a40;padding:12px 16px;color:#b08ac0;font-size:12px;margin-bottom:16px;display:none}
 
 .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px}
@@ -174,6 +178,7 @@ const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 
 <main>
 <div id="scraper-alert" class="scraper-alert"></div>
+<div id="market-narrative" class="market-narrative"></div>
 <div id="room-rental-note" class="room-rental-note">Room rentals are visible in the browse table but excluded from all stats above.</div>
 
 <!-- KPIs -->
@@ -374,6 +379,7 @@ let listingsCache=[];
 let sortField='price';
 let sortDir=-1; // -1=desc, 1=asc
 let trendDataCache=null;
+let summaryDataCache=null;
 
 function coordsFor(n){
   if(!n) return null;
@@ -409,6 +415,87 @@ async function sbFetch(path,params={}){
   return res.json();
 }
 
+// ── Market narrative ──────────────────────────────────────────────────────
+function buildNarrative(){
+  const el=document.getElementById('market-narrative');
+  if(!summaryDataCache||!trendDataCache||!trendDataCache.length){el.classList.remove('visible');return;}
+
+  const S=summaryDataCache;
+  const snaps=trendDataCache;
+  const cfg=MARKETS[currentMarket];
+
+  // Compute trends from snapshots (category=all, bedrooms=null = totals)
+  const totals=snaps.filter(s=>s.category==='all'&&s.bedrooms===null).sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+  if(totals.length<5){el.classList.remove('visible');return;}
+
+  const first=totals[0],last=totals[totals.length-1];
+  const days=totals.length;
+  const countChg=last.listing_count-first.listing_count;
+  const countPct=((countChg/first.listing_count)*100);
+  const priceChg=last.median_price-first.median_price;
+  const pricePct=((priceChg/first.median_price)*100);
+
+  // Absorption totals
+  const totalNew=totals.reduce((s,x)=>s+(x.new_listings||0),0);
+  const totalRem=totals.reduce((s,x)=>s+(x.removed_listings||0),0);
+  const absRatio=totalRem>0?(totalNew/totalRem):null;
+
+  // Per-bedroom trends
+  const brLabels=['Studio','1BR','2BR','3BR','4+BR'];
+  const brVals=[0,1,2,3,4];
+  const brTrends=brVals.map((br,i)=>{
+    const series=snaps.filter(s=>s.category==='all'&&(br<4?s.bedrooms===br:s.bedrooms>=4)).sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+    if(series.length<3)return null;
+    const f=series[0],l=series[series.length-1];
+    const pChg=f.median_price&&l.median_price?((l.median_price-f.median_price)/f.median_price*100):null;
+    const cChg=l.listing_count-f.listing_count;
+    return{label:brLabels[i],priceChg:pChg,countChg:cChg,count:l.listing_count,median:l.median_price};
+  }).filter(Boolean);
+
+  // Build narrative sentences
+  const parts=[];
+  const mktName=cfg.label;
+
+  // Supply sentence
+  const supplyDir=countPct>2?'expanding':countPct<-2?'contracting':'stable';
+  const supplyAdj=Math.abs(countPct)>10?'sharply ':(Math.abs(countPct)>5?'':'modestly ');
+  parts.push(`<strong>${mktName}</strong> has <strong>${S.totalListings.toLocaleString()}</strong> active rental listings with a median asking price of <strong>${fmt$(S.medianPrice)}</strong>. Over the past ${days} days, supply has been ${supplyAdj}${supplyDir} (${countChg>=0?'+':''}${countChg} listings, ${countPct>=0?'+':''}${countPct.toFixed(1)}%).`);
+
+  // Price sentence
+  const priceDir=pricePct>1?'rising':pricePct<-1?'declining':'holding steady';
+  const priceAdj=Math.abs(pricePct)>8?'significantly ':(Math.abs(pricePct)>4?'':'slightly ');
+  parts.push(`Median pricing is ${priceAdj}${priceDir} (${pricePct>=0?'+':''}${pricePct.toFixed(1)}%).`);
+
+  // Absorption sentence
+  if(absRatio!=null){
+    const absDesc=absRatio<0.85?'tightening — removals are outpacing new supply':absRatio>1.15?'loosening — new supply is outpacing removals':'roughly balanced between new supply and removals';
+    parts.push(`Absorption is ${absDesc} (${absRatio.toFixed(2)}x ratio).`);
+  }
+
+  // Notable bedroom dynamics
+  const rising=brTrends.filter(b=>b.priceChg!=null&&b.priceChg>3).sort((a,b)=>b.priceChg-a.priceChg);
+  const falling=brTrends.filter(b=>b.priceChg!=null&&b.priceChg<-3).sort((a,b)=>a.priceChg-b.priceChg);
+  const growing=brTrends.filter(b=>b.countChg>5).sort((a,b)=>b.countChg-a.countChg);
+
+  const highlights=[];
+  if(rising.length)highlights.push(rising.map(b=>`${b.label} (+${b.priceChg.toFixed(0)}%)`).join(', ')+` ${rising.length>1?'are':'is'} seeing price increases`);
+  if(falling.length)highlights.push(falling.map(b=>`${b.label} (${b.priceChg.toFixed(0)}%)`).join(', ')+` ${falling.length>1?'are':'is'} declining`);
+  if(growing.length&&highlights.length<2)highlights.push(growing.map(b=>`${b.label} (+${b.countChg})`).join(', ')+` ${growing.length>1?'are':'is'} adding the most inventory`);
+
+  if(highlights.length===1) parts.push(highlights[0]+'.');
+  else if(highlights.length===2) parts.push(highlights[0]+', while '+highlights[1]+'.');
+  else if(highlights.length>2) parts.push(highlights.slice(0,-1).join(', ')+', and '+highlights[highlights.length-1]+'.');
+
+  // DOM context
+  if(S.avgDom!=null){
+    const domDesc=S.avgDom<10?'fast-moving':S.avgDom<18?'moderately paced':'slow-moving';
+    parts.push(`Listings are ${domDesc} at an average of <strong>${S.avgDom} days</strong> on market.`);
+  }
+
+  el.innerHTML=`<div class="narrative-label">Market Summary</div>${parts.join(' ')}`;
+  el.classList.add('visible');
+}
+
 function setMarket(market,btn){
   currentMarket=market;
   trendDataCache=null;
@@ -425,6 +512,7 @@ function setMarket(market,btn){
 
 async function loadAll(){
   await Promise.all([loadSummary(),loadNeighborhoods(),loadListings(),loadSnapshots()]);
+  buildNarrative();
 }
 
 // ── Summary: KPIs, pricing table, DOM table, charts ──────────────────────
@@ -474,6 +562,22 @@ async function loadSummary(){
   const doms=withDom.map(r=>daysBetween(r.first_seen,today)).filter(d=>d!=null&&d>=0);
   const avgDom=doms.length?Math.round(doms.reduce((s,x)=>s+x,0)/doms.length):null;
   document.getElementById('kpi-dom').textContent=avgDom!=null?avgDom+'d':'—';
+
+  // Cache summary for narrative
+  summaryDataCache={
+    totalListings:real.length,
+    medianPrice:median(prices),
+    aptMedian:median(real.filter(r=>r.category==='apartments').map(r=>r.price)),
+    houseMedian:median(real.filter(r=>r.category==='houses').map(r=>r.price)),
+    avgDom,
+    byBedroom:[
+      {label:'Studio',count:real.filter(r=>r.bedrooms===0).length,median:median(real.filter(r=>r.bedrooms===0).map(r=>r.price))},
+      {label:'1BR',count:real.filter(r=>r.bedrooms===1).length,median:median(real.filter(r=>r.bedrooms===1).map(r=>r.price))},
+      {label:'2BR',count:real.filter(r=>r.bedrooms===2).length,median:median(real.filter(r=>r.bedrooms===2).map(r=>r.price))},
+      {label:'3BR',count:real.filter(r=>r.bedrooms===3).length,median:median(real.filter(r=>r.bedrooms===3).map(r=>r.price))},
+      {label:'4+BR',count:real.filter(r=>r.bedrooms>=4).length,median:median(real.filter(r=>r.bedrooms>=4).map(r=>r.price))},
+    ],
+  };
 
   // Bedroom pricing table
   const BR=[
