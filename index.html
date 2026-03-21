@@ -429,17 +429,18 @@ async function loadSummary(){
     select:'price,category,bedrooms,scraped_at,first_seen,last_seen',
     market:`eq.${currentMarket}`,
     limit:'10000',
-    order:'scraped_at.desc',
+    order:'last_seen.desc',
   });
 
-  // Health check
+  // Health check — use last_seen (updated for ALL listings each run)
+  // instead of scraped_at (only set on INSERT of new listings)
   const alertEl=document.getElementById('scraper-alert');
   if(!rows.length){
     alertEl.style.display='block';
     alertEl.innerHTML='<strong>⚠ No data for this market.</strong> Scraper may not have run yet.';
   } else {
-    const mostRecent=rows[0].scraped_at;
-    const hoursSince=(Date.now()-new Date(mostRecent))/(3600000);
+    const mostRecent=rows[0].last_seen;
+    const hoursSince=(Date.now()-new Date(mostRecent+'T23:59:59Z'))/(3600000);
     if(hoursSince>30){
       alertEl.style.display='block';
       alertEl.innerHTML=`<strong>⚠ Scraper may be broken.</strong> Last data: <strong>${Math.round(hoursSince)}h ago</strong>. Check <a href="https://github.com/matt-dcp/sb-rentals/actions" target="_blank" style="color:var(--red)">GitHub Actions</a>.`;
@@ -450,8 +451,8 @@ async function loadSummary(){
 
   if(!rows.length) return;
 
-  const last=rows[0].scraped_at?.slice(0,19).replace('T',' ')||'—';
-  document.getElementById('header-meta').innerHTML=`Last scraped: <strong>${last}</strong> UTC`;
+  const last=rows[0].last_seen||'—';
+  document.getElementById('header-meta').innerHTML=`Last scraped: <strong>${last}</strong>`;
 
   const real=rows.filter(r=>r.category!=='room_rental'&&r.price>=500&&r.price<=20000);
   const roomCount=rows.filter(r=>r.category==='room_rental').length;
