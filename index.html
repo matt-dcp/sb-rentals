@@ -1104,21 +1104,29 @@ async function loadPriceTracking(){
   const stealthCuts=recent30r.filter(r=>r.price_change_pct!=null&&r.price_change_pct<0);
 
   document.getElementById('pt-cuts').textContent=cuts.length||'0';
-  document.getElementById('pt-cuts-sub').textContent=cuts.length
-    ?`avg ${(cuts.reduce((s,c)=>s+c.change_pct,0)/cuts.length).toFixed(1)}% · last 30d`
-    :'last 30 days';
+  if(cuts.length){
+    const avgPct=(cuts.reduce((s,c)=>s+c.change_pct,0)/cuts.length).toFixed(1);
+    const avgDol=Math.round(Math.abs(cuts.reduce((s,c)=>s+(c.new_price-c.old_price),0)/cuts.length));
+    document.getElementById('pt-cuts-sub').textContent=`avg ${avgPct}% (-${fmt$(avgDol)}) · last 30d`;
+  } else document.getElementById('pt-cuts-sub').textContent='last 30 days';
+
   document.getElementById('pt-raises').textContent=raises.length||'0';
-  document.getElementById('pt-raises-sub').textContent=raises.length
-    ?`avg +${(raises.reduce((s,c)=>s+c.change_pct,0)/raises.length).toFixed(1)}% · last 30d`
-    :'last 30 days';
+  if(raises.length){
+    const avgPct=(raises.reduce((s,c)=>s+c.change_pct,0)/raises.length).toFixed(1);
+    const avgDol=Math.round(raises.reduce((s,c)=>s+(c.new_price-c.old_price),0)/raises.length);
+    document.getElementById('pt-raises-sub').textContent=`avg +${avgPct}% (+${fmt$(avgDol)}) · last 30d`;
+  } else document.getElementById('pt-raises-sub').textContent='last 30 days';
+
   document.getElementById('pt-reposts').textContent=recent30r.length||'0';
   document.getElementById('pt-reposts-sub').textContent=recent30r.length
     ?`${recent30r.filter(r=>r.title_similarity>=0.9).length} exact matches`
     :'delete & relist';
   document.getElementById('pt-stealth').textContent=stealthCuts.length||'0';
-  document.getElementById('pt-stealth-sub').textContent=stealthCuts.length
-    ?`avg ${(stealthCuts.reduce((s,r)=>s+r.price_change_pct,0)/stealthCuts.length).toFixed(1)}%`
-    :'reposts with lower price';
+  if(stealthCuts.length){
+    const avgPct=(stealthCuts.reduce((s,r)=>s+r.price_change_pct,0)/stealthCuts.length).toFixed(1);
+    const avgDol=Math.round(Math.abs(stealthCuts.reduce((s,r)=>s+(r.repost_price-r.original_price),0)/stealthCuts.length));
+    document.getElementById('pt-stealth-sub').textContent=`avg ${avgPct}% (-${fmt$(avgDol)})`;
+  } else document.getElementById('pt-stealth-sub').textContent='reposts with lower price';
 
   // Price changes table (most recent 20)
   const changesBody=document.getElementById('pt-changes-body');
