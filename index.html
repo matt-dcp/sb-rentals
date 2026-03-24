@@ -138,6 +138,28 @@ a:hover{text-decoration:underline}
 .no-data{color:var(--muted);padding:20px;font-size:13px}
 .section-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:28px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .data-age-note{font-size:11px;color:var(--muted);margin-top:10px;font-style:italic}
+
+.pt-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:900px){.pt-kpi-row{grid-template-columns:repeat(2,1fr)}}
+.pt-kpi{background:var(--surface);border:1px solid var(--border);padding:14px 16px;position:relative}
+.pt-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.pt-kpi.cuts::before{background:var(--red)}.pt-kpi.raises::before{background:var(--green)}
+.pt-kpi.reposts::before{background:#a06eb0}.pt-kpi.stealth::before{background:var(--gold)}
+.pt-kpi-label{color:var(--muted);font-size:10px;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:3px}
+.pt-kpi-value{font-size:1.5rem;color:var(--bright);font-family:var(--serif);line-height:1.1}
+.pt-kpi-sub{color:var(--muted);font-size:11px;margin-top:3px}
+
+table.pt-table{width:100%;border-collapse:collapse;font-size:12px}
+table.pt-table th{text-align:left;color:var(--muted);font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--border)}
+table.pt-table td{padding:8px 10px;border-bottom:1px solid #1e2128;vertical-align:top}
+table.pt-table tr:hover td{background:#1c1f26}
+.chg-down{color:var(--red);font-weight:500}
+.chg-up{color:var(--green);font-weight:500}
+.chg-flat{color:var(--muted)}
+.sim-badge{display:inline-block;font-size:10px;padding:1px 6px;border:1px solid var(--border);color:var(--muted)}
+.sim-high{border-color:#a06eb0;color:#a06eb0}
+.sim-exact{border-color:var(--red);color:var(--red)}
+.pt-empty{color:var(--muted);padding:16px;font-size:12px;text-align:center}
 </style>
 </head>
 <body>
@@ -264,6 +286,39 @@ const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 <div class="card" style="margin-bottom:16px">
   <div class="card-title">New Listings Per Day <span>last 30 days</span></div>
   <div style="position:relative;height:160px"><canvas id="chart-time"></canvas></div>
+</div>
+
+<!-- Price Tracking -->
+<div class="section-label">Price Tracking</div>
+<div class="pt-kpi-row">
+  <div class="pt-kpi cuts"><div class="pt-kpi-label">Price Cuts</div><div class="pt-kpi-value" id="pt-cuts">—</div><div class="pt-kpi-sub" id="pt-cuts-sub">last 30 days</div></div>
+  <div class="pt-kpi raises"><div class="pt-kpi-label">Price Increases</div><div class="pt-kpi-value" id="pt-raises">—</div><div class="pt-kpi-sub" id="pt-raises-sub">last 30 days</div></div>
+  <div class="pt-kpi reposts"><div class="pt-kpi-label">Reposts Detected</div><div class="pt-kpi-value" id="pt-reposts">—</div><div class="pt-kpi-sub" id="pt-reposts-sub">delete &amp; relist</div></div>
+  <div class="pt-kpi stealth"><div class="pt-kpi-label">Stealth Cuts</div><div class="pt-kpi-value" id="pt-stealth">—</div><div class="pt-kpi-sub" id="pt-stealth-sub">reposts with lower price</div></div>
+</div>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Recent Price Changes <span>in-place edits on active listings</span></div>
+    <div class="table-wrap">
+      <table class="pt-table">
+        <thead><tr><th>Listing</th><th>Type</th><th>Old</th><th>New</th><th>Change</th><th>Date</th></tr></thead>
+        <tbody id="pt-changes-body"><tr><td colspan="6" class="pt-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Detected Reposts <span>removed &amp; relisted within 7 days · similarity ≥ 50%</span></div>
+    <div class="table-wrap">
+      <table class="pt-table">
+        <thead><tr><th>Listing</th><th>Original $</th><th>Repost $</th><th>Change</th><th>Match</th><th>Date</th></tr></thead>
+        <tbody id="pt-reposts-body"><tr><td colspan="6" class="pt-empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">Price Change Distribution <span>last 30 days · negative = cuts · positive = increases</span></div>
+  <div style="position:relative;height:200px"><canvas id="chart-price-changes"></canvas></div>
 </div>
 
 <!-- Comps Tool -->
@@ -511,7 +566,7 @@ function setMarket(market,btn){
 }
 
 async function loadAll(){
-  await Promise.all([loadSummary(),loadNeighborhoods(),loadListings(),loadSnapshots()]);
+  await Promise.all([loadSummary(),loadNeighborhoods(),loadListings(),loadSnapshots(),loadPriceTracking()]);
   buildNarrative();
 }
 
@@ -1020,6 +1075,124 @@ function rebuildGroupedBar(id,labels,curCounts,priorCounts,color){
       scales:{x:{grid:{color:'#1e2128'}},y:{grid:{color:'#1e2128'},ticks:{stepSize:1}}}
     }
   });
+}
+
+// ── Price Tracking ────────────────────────────────────────────────────────
+async function loadPriceTracking(){
+  const cutoff30=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+
+  const [changes,reposts]=await Promise.all([
+    sbFetch('price_changes',{
+      select:'listing_id,market,category,bedrooms,old_price,new_price,change_pct,change_date,title',
+      market:`eq.${currentMarket}`,
+      order:'change_date.desc',
+      limit:'200',
+    }),
+    sbFetch('reposts',{
+      select:'original_id,repost_id,market,bedrooms,original_price,repost_price,price_change,price_change_pct,title_similarity,original_title,repost_title,detected_date',
+      market:`eq.${currentMarket}`,
+      order:'detected_date.desc',
+      limit:'200',
+    }),
+  ]);
+
+  // KPIs (last 30 days)
+  const recent30c=changes.filter(c=>c.change_date>=cutoff30);
+  const recent30r=reposts.filter(r=>r.detected_date>=cutoff30);
+  const cuts=recent30c.filter(c=>c.change_pct<0);
+  const raises=recent30c.filter(c=>c.change_pct>0);
+  const stealthCuts=recent30r.filter(r=>r.price_change_pct!=null&&r.price_change_pct<0);
+
+  document.getElementById('pt-cuts').textContent=cuts.length||'0';
+  document.getElementById('pt-cuts-sub').textContent=cuts.length
+    ?`avg ${(cuts.reduce((s,c)=>s+c.change_pct,0)/cuts.length).toFixed(1)}% · last 30d`
+    :'last 30 days';
+  document.getElementById('pt-raises').textContent=raises.length||'0';
+  document.getElementById('pt-raises-sub').textContent=raises.length
+    ?`avg +${(raises.reduce((s,c)=>s+c.change_pct,0)/raises.length).toFixed(1)}% · last 30d`
+    :'last 30 days';
+  document.getElementById('pt-reposts').textContent=recent30r.length||'0';
+  document.getElementById('pt-reposts-sub').textContent=recent30r.length
+    ?`${recent30r.filter(r=>r.title_similarity>=0.9).length} exact matches`
+    :'delete & relist';
+  document.getElementById('pt-stealth').textContent=stealthCuts.length||'0';
+  document.getElementById('pt-stealth-sub').textContent=stealthCuts.length
+    ?`avg ${(stealthCuts.reduce((s,r)=>s+r.price_change_pct,0)/stealthCuts.length).toFixed(1)}%`
+    :'reposts with lower price';
+
+  // Price changes table (most recent 20)
+  const changesBody=document.getElementById('pt-changes-body');
+  if(!changes.length){
+    changesBody.innerHTML='<tr><td colspan="6" class="pt-empty">No price changes detected yet. Data accumulates daily.</td></tr>';
+  } else {
+    changesBody.innerHTML=changes.slice(0,20).map(c=>{
+      const cls=c.change_pct<0?'chg-down':c.change_pct>0?'chg-up':'chg-flat';
+      const arrow=c.change_pct<0?'▼':c.change_pct>0?'▲':'—';
+      const brLabel=c.bedrooms!=null?(c.bedrooms===0?'Studio':c.bedrooms+'BR'):'—';
+      return`<tr>
+        <td style="max-width:200px"><span class="truncate" title="${(c.title||'').replace(/"/g,"'")}">${c.title||'—'}</span></td>
+        <td><span class="cat-badge ${c.category||''}">${brLabel}</span></td>
+        <td style="color:var(--muted)">${fmt$(c.old_price)}</td>
+        <td class="${cls}">${fmt$(c.new_price)}</td>
+        <td class="${cls}">${arrow} ${Math.abs(c.change_pct).toFixed(1)}%</td>
+        <td style="white-space:nowrap;color:var(--muted)">${c.change_date}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Reposts table (most recent 20)
+  const repostsBody=document.getElementById('pt-reposts-body');
+  if(!reposts.length){
+    repostsBody.innerHTML='<tr><td colspan="6" class="pt-empty">No reposts detected yet. Data accumulates daily.</td></tr>';
+  } else {
+    repostsBody.innerHTML=reposts.slice(0,20).map(r=>{
+      const hasPriceChg=r.price_change_pct!=null&&r.price_change_pct!==0;
+      const cls=hasPriceChg?(r.price_change_pct<0?'chg-down':'chg-up'):'chg-flat';
+      const arrow=hasPriceChg?(r.price_change_pct<0?'▼':'▲'):'—';
+      const chgText=hasPriceChg?`${arrow} ${Math.abs(r.price_change_pct).toFixed(1)}%`:'same';
+      const simPct=Math.round((r.title_similarity||0)*100);
+      const simCls=simPct>=95?'sim-exact':simPct>=75?'sim-high':'';
+      return`<tr>
+        <td style="max-width:200px"><span class="truncate" title="${(r.repost_title||'').replace(/"/g,"'")}">${r.repost_title||'—'}</span></td>
+        <td style="color:var(--muted)">${fmt$(r.original_price)}</td>
+        <td class="${cls}">${fmt$(r.repost_price)}</td>
+        <td class="${cls}">${chgText}</td>
+        <td><span class="sim-badge ${simCls}">${simPct}%</span></td>
+        <td style="white-space:nowrap;color:var(--muted)">${r.detected_date}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Price change distribution chart
+  const distData=recent30c.map(c=>c.change_pct).filter(v=>v!=null);
+  if(distData.length>=3){
+    const buckets=[
+      {l:'< -10%',t:v=>v<=-10},{l:'-10 to -5%',t:v=>v>-10&&v<=-5},
+      {l:'-5 to -2%',t:v=>v>-5&&v<=-2},{l:'-2 to 0%',t:v=>v>-2&&v<0},
+      {l:'0 to +2%',t:v=>v>=0&&v<2},{l:'+2 to +5%',t:v=>v>=2&&v<5},
+      {l:'+5 to +10%',t:v=>v>=5&&v<10},{l:'> +10%',t:v=>v>=10},
+    ];
+    const counts=buckets.map(b=>distData.filter(v=>b.t(v)).length);
+    const colors=buckets.map((_,i)=>i<4?'rgba(212,110,110,'+(0.4+i*0.15)+')':'rgba(110,207,160,'+(0.4+(i-4)*0.15)+')');
+    if(charts['chart-price-changes']) charts['chart-price-changes'].destroy();
+    charts['chart-price-changes']=new Chart(document.getElementById('chart-price-changes'),{
+      type:'bar',
+      data:{labels:buckets.map(b=>b.l),datasets:[{data:counts,backgroundColor:colors,borderWidth:0,borderRadius:2}]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{grid:{color:'#1e2128'},ticks:{font:{size:10}}},
+          y:{grid:{color:'#1e2128'},ticks:{stepSize:1}}
+        }
+      }
+    });
+  } else {
+    if(charts['chart-price-changes']) charts['chart-price-changes'].destroy();
+    const ctx=document.getElementById('chart-price-changes').getContext('2d');
+    ctx.fillStyle='#7a8399';ctx.font="13px 'DM Mono',monospace";ctx.textAlign='center';
+    ctx.fillText('Not enough data yet for distribution chart',ctx.canvas.width/2,100);
+  }
 }
 
 document.addEventListener('DOMContentLoaded',()=>{initMap();loadAll()});
