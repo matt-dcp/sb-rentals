@@ -30,6 +30,12 @@ MARKETS = [
         "apartments": "https://ventura.craigslist.org/search/ojai-ca/apa",
         "houses":     "https://ventura.craigslist.org/search/ojai-ca/hhh",
     },
+    {
+        "market":     "santa_maria",
+        "base_url":   "https://santamaria.craigslist.org",
+        "apartments": "https://santamaria.craigslist.org/search/santa-maria-ca/apa",
+        "houses":     "https://santamaria.craigslist.org/search/santa-maria-ca/hhh",
+    },
 ]
 
 NEIGHBORHOOD_SILOS = [
@@ -636,7 +642,7 @@ def compute_snapshots(today_str):
 # ── Main ──────────────────────────────────────────────────────────────────
 def main():
     log.info("═" * 60)
-    log.info("SB + Ojai Rental Scraper v3 — starting")
+    log.info("SB + Ojai + Santa Maria Rental Scraper v3 — starting")
 
     today_str = date.today().isoformat()
     log.info(f"Scrape date: {today_str}")
