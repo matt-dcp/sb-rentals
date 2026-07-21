@@ -2,7 +2,7 @@
 -- Makes the public anon key read-only across all four tables. The scraper
 -- must write with the service_role key (set SUPABASE_SERVICE_ROLE_KEY as a
 -- GitHub Actions secret BEFORE running this, or the nightly scrape will fail).
--- Run via the "Run Migration" GitHub Action or the Supabase SQL Editor.
+-- Run in the Supabase SQL Editor (Dashboard → SQL Editor → New Query).
 
 -- 1. Enable RLS on the two tables that had none
 ALTER TABLE listings ENABLE ROW LEVEL SECURITY;
