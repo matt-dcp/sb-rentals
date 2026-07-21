@@ -23,11 +23,11 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4 psycopg2-binary
+        run: pip install requests beautifulsoup4
 
       - name: Run scraper
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python scraper.py
 
       - name: Keep-alive (prevent 60-day cron disable)

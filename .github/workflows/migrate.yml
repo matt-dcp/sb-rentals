@@ -2,6 +2,11 @@ name: Run Migration
 
 on:
   workflow_dispatch:
+    inputs:
+      migration_file:
+        description: 'Path to the migration SQL file to run'
+        required: true
+        default: 'migrations/003_rls_lockdown.sql'
 
 jobs:
   migrate:
@@ -26,13 +31,14 @@ jobs:
       - name: Run migration
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          MIGRATION_FILE: ${{ inputs.migration_file }}
         run: |
           python3 << 'PYEOF'
           import psycopg2, os
           conn = psycopg2.connect(os.environ['SUPABASE_DB_URL'], connect_timeout=15)
           conn.autocommit = True
           cur = conn.cursor()
-          with open('migrations/002_price_tracking.sql') as f:
+          with open(os.environ['MIGRATION_FILE']) as f:
               sql = f.read()
           cur.execute(sql)
           print('Migration completed successfully')

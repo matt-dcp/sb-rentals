@@ -106,8 +106,12 @@ WORD_TO_NUM = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6}
 
 # ── Supabase ──────────────────────────────────────────────────────────────
 SUPABASE_URL = "https://wzlccltlthlaguazgten.supabase.co"
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6bGNjbHRsdGhsYWd1YXpndGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc4ODMsImV4cCI6MjA4NzM1Mzg4M30.5KuGMYwAYGiK0UYDcHxgIjXAHd-s_v6gutigVIH_zZM")
+# Must be the service_role key: RLS (migration 003) makes anon read-only,
+# so writes with the anon key silently violate policy. No fallback on purpose.
+try:
+    SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+except KeyError:
+    raise SystemExit("SUPABASE_KEY env var is required (service_role key; anon is read-only since migration 003)")
 
 SB_HEADERS = {
     'apikey':        SUPABASE_KEY,
