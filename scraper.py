@@ -10,7 +10,7 @@ New in v3:
 
 import requests
 from bs4 import BeautifulSoup
-import time, logging, re, os, json
+import time, logging, re, os, sys, json
 import urllib.request, urllib.error
 from datetime import datetime, timezone, date, timedelta
 from collections import defaultdict
@@ -18,25 +18,33 @@ import statistics
 
 # ── Markets ───────────────────────────────────────────────────────────────
 MARKETS = [
-    {
-        "market":     "santa_barbara",
-        "base_url":   "https://santabarbara.craigslist.org",
-        "apartments": "https://santabarbara.craigslist.org/search/apa",
-        "houses":     "https://santabarbara.craigslist.org/search/hhh",
-    },
-    {
-        "market":     "ojai",
-        "base_url":   "https://ventura.craigslist.org",
-        "apartments": "https://ventura.craigslist.org/search/ojai-ca/apa",
-        "houses":     "https://ventura.craigslist.org/search/ojai-ca/hhh",
-    },
-    {
-        "market":     "santa_maria",
-        "base_url":   "https://santamaria.craigslist.org",
-        "apartments": "https://santamaria.craigslist.org/search/santa-maria-ca/apa",
-        "houses":     "https://santamaria.craigslist.org/search/santa-maria-ca/hhh",
-    },
+    # AreaIDs from https://reference.craigslist.org/Areas
+    {"market": "santa_barbara", "area": 62,  "host": "santabarbara"},
+    # Ojai has no Craigslist subarea ID, so it is scoped by radius from the town.
+    {"market": "ojai",          "area": 208, "host": "ventura",
+     "lat": 34.4480, "lon": -119.2429, "radius": 10},
+    {"market": "santa_maria",   "area": 710, "host": "santamaria"},
 ]
+
+# Craigslist stopped serving listings in the search HTML to datacenter IPs: the
+# page returns 200 with zero result nodes, which is indistinguishable from "no
+# more pages". We read the JSON API the site's own front end uses instead.
+CL_API      = "https://sapi.craigslist.org/web/v8/postings/search/full"
+API_CAP     = 360          # hard ceiling on items the API returns per query
+SEARCH_PATH = {"apartments": "apa", "houses": "hhh"}
+
+# The API caps every response at API_CAP and exposes no usable offset or cursor
+# (the site's own "load more" uses a cacheId that the JSON never returns), so
+# coverage comes from partitioning the result set by price instead. Any band
+# that still comes back full gets bisected -- see fetch_band().
+#
+# Craigslist also pads a thin result set with listings from NEARBY areas, which
+# ignore both the price band and the search radius. Those padded rows always sit
+# after the first totalResultCount entries, so every response is truncated to
+# that count before decoding -- otherwise Ojai fills up with Ventura county and
+# the same postings repeat across every band.
+PRICE_BANDS = [(0, 1500), (1501, 2200), (2201, 2800), (2801, 3500),
+               (3501, 4500), (4501, 6000), (6001, 10000), (10001, None)]
 
 NEIGHBORHOOD_SILOS = [
     ("isla_vista",  ["isla vista", "isla vista iv", "ucsb iv", "ucsb area", "iv "]),
@@ -55,7 +63,7 @@ HEADERS = {
     )
 }
 REQUEST_DELAY = 1.5
-MAX_PAGES     = 10
+MAX_RESULTS   = 3000   # safety cap per market/category
 
 URL_CODE_JUNK      = {'off', 'prk', 'reb', 'reo', 'sbw', 'vac'}
 URL_CODE_ROOM      = {'roo', 'sha'}
@@ -189,93 +197,178 @@ def parse_sqft(s):
     return None
 
 # ── Scraping ──────────────────────────────────────────────────────────────
-def scrape_page(session, url, market, category, today_str):
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        log.warning(f"Failed: {url}: {e}")
-        return []
+def api_fetch(session, mkt, category, lo, hi):
+    """One API query, scoped to a price band. Raises on any transport error.
 
-    soup    = BeautifulSoup(resp.text, "html.parser")
-    results = []
+    Returns (items, total) with nearby-area padding already stripped.
+    """
+    params = {
+        "batch":      f"{mkt['area']}-0-{API_CAP}-0-0",
+        "searchPath": SEARCH_PATH[category],
+        "cc":         "US",
+        "lang":       "en",
+        "min_price":  lo,
+    }
+    if hi is not None:
+        params["max_price"] = hi
+    if mkt.get("lat") is not None:
+        params.update({"lat": mkt["lat"], "lon": mkt["lon"],
+                       "search_distance": mkt["radius"]})
+    resp = session.get(CL_API, params=params, headers=HEADERS, timeout=30)
+    resp.raise_for_status()
+    data  = resp.json()["data"]
+    total = data.get("totalResultCount") or 0
+    items = data.get("items") or []
+    if len(items) > total:
+        data["items"] = items[:total]
+    return data, total
 
-    for item in soup.select("li.cl-static-search-result"):
+
+def decode_items(data, market, category, today_str):
+    """Decode the API's delta-encoded item arrays into listing dicts.
+
+    Each item is a mixed array: item[0] is a delta on decode.minPostingId,
+    item[3] the price, and the rest are tagged sub-arrays -- 5:[beds, sqft],
+    6:[slug], 13:[canonical token] -- plus a "1:{locIdx}~lat~lon" geo string
+    and the title as the last untagged string.
+    """
+    dec   = data.get("decode") or {}
+    minid = dec.get("minPostingId") or 0
+    locs  = dec.get("locationDescriptions") or []
+    out   = []
+
+    for it in data.get("items") or []:
         try:
-            title    = (item.get("title") or "").strip() or None
-            link_el  = item.select_one("a")
-            post_url = link_el["href"] if link_el else None
-
-            post_id  = None
-            url_code = None
-            if post_url:
-                m = re.search(r"/(\d+)\.html", post_url)
-                if m: post_id = m.group(1)
-                c = re.search(r'\.org/([a-z]+)/', post_url)
-                if c: url_code = c.group(1)
-            if not post_id:
+            post_id = str(minid + it[0])
+            price   = it[3] if len(it) > 3 and isinstance(it[3], int) else None
+            if not price:
                 continue
 
-            if url_code in URL_CODE_JUNK: continue
-            if JUNK_RE.search(title or ''): continue
+            slug = token = neighborhood = None
+            beds = sqft = None
+            plain = []
 
-            price_el = item.select_one(".price")
-            price    = parse_price(price_el.get_text(strip=True)) if price_el else None
-            if not price: continue
+            for x in it:
+                if isinstance(x, list) and x:
+                    if   x[0] == 6  and len(x) > 1: slug  = x[1]
+                    elif x[0] == 13 and len(x) > 1: token = x[1]
+                    elif x[0] == 5:
+                        if len(x) > 1: beds = x[1]
+                        if len(x) > 2 and x[2]: sqft = x[2]
+                elif isinstance(x, str):
+                    if x.startswith("1:"):
+                        idx = int(x[2:].split("~")[0]) + 1
+                        if 0 <= idx < len(locs) and isinstance(locs[idx], str):
+                            neighborhood = locs[idx]
+                    else:
+                        plain.append(x)
 
-            hood_el      = item.select_one(".location")
-            neighborhood = hood_el.get_text(strip=True).title() if hood_el else None
-            resolved_market = resolve_market(market, neighborhood)
+            title = plain[-1].strip() if plain else None
+            if not title or JUNK_RE.search(title):
+                continue
 
-            if url_code in URL_CODE_ROOM or ROOM_RE.search(title or ''):
+            if ROOM_RE.search(title):
                 resolved_category = 'room_rental'
-            elif url_code in URL_CODE_HOUSES:
+            elif category == 'houses':
+                # Reached only for ids absent from the apartments pass.
                 resolved_category = 'houses'
-            elif url_code in URL_CODE_APARTMENT:
-                resolved_category = 'houses' if HOUSE_IN_APT_RE.search(title or '') else 'apartments'
             else:
-                resolved_category = category
+                resolved_category = 'houses' if HOUSE_IN_APT_RE.search(title) else 'apartments'
 
-            beds, baths = parse_beds_baths(title)
-            sqft        = parse_sqft(title)
+            _, baths = parse_beds_baths(title)
+            if beds is None:
+                beds, _ = parse_beds_baths(title)
+            if not sqft:
+                sqft = parse_sqft(title)
 
-            results.append({
+            url = (f"https://www.craigslist.org/view/d/{slug}/{token}" if slug and token
+                   else f"https://{mkt_host(market)}.craigslist.org/apa/d/{slug or 'x'}/{post_id}.html")
+
+            out.append({
                 "id":           post_id,
-                "market":       resolved_market,
+                "market":       resolve_market(market, neighborhood),
                 "category":     resolved_category,
                 "title":        title,
                 "price":        price,
                 "bedrooms":     beds,
                 "bathrooms":    baths,
                 "sqft":         sqft,
-                "neighborhood": neighborhood,
-                "url":          post_url,
+                "neighborhood": neighborhood.title() if neighborhood else None,
+                "url":          url,
                 "posted_date":  today_str,
                 "scraped_at":   datetime.now(timezone.utc).isoformat(),
                 "first_seen":   today_str,  # only used on INSERT; ignored on UPDATE
                 "last_seen":    today_str,
             })
         except Exception as e:
-            log.debug(f"Parse error: {e}")
+            log.debug(f"Decode error: {e}")
 
-    return results
+    return out
+
+
+_HOSTS = {m["market"]: m["host"] for m in MARKETS}
+def mkt_host(market):
+    return _HOSTS.get(market, "santabarbara")
+
+
+def fetch_band(session, mkt, category, lo, hi, today_str, seen, depth=0):
+    """Fetch one price band, bisecting it if the API truncates at the cap."""
+    data, total = api_fetch(session, mkt, category, lo, hi)
+
+    if total >= API_CAP and depth < 5 and (hi is None or hi - lo > 100):
+        mid = (lo + hi) // 2 if hi is not None else lo * 2
+        log.info(f"      band {lo}-{hi} returned {total} (capped), splitting at {mid}")
+        time.sleep(REQUEST_DELAY)
+        out = fetch_band(session, mkt, category, lo, mid, today_str, seen, depth + 1)
+        time.sleep(REQUEST_DELAY)
+        out += fetch_band(session, mkt, category, mid + 1, hi, today_str, seen, depth + 1)
+        return out
+
+    items = [l for l in decode_items(data, mkt["market"], category, today_str)
+             if l["id"] not in seen]
+    for l in items:
+        seen.add(l["id"])
+    return items
 
 
 def scrape_all(session, today_str):
-    all_listings = []
+    """Scrape every market/category. Returns (listings, failures).
+
+    'hhh' is the parent housing category and is a superset of 'apa', so
+    apartments are scraped first and their ids suppressed from the houses pass;
+    otherwise every apartment would be re-classified as a house on the way in.
+
+    A market/category that yields nothing is recorded as a failure rather than
+    treated as "no results" -- that is the exact signal that went unnoticed when
+    Craigslist began soft-blocking the runner in June.
+    """
+    all_listings, failures = [], []
+    seen = set()
+
     for mkt in MARKETS:
         market = mkt["market"]
         log.info(f"Market: {market}")
         for category in ("apartments", "houses"):
-            for page in range(MAX_PAGES):
-                url      = f"{mkt[category]}?start={page * 120}"
-                log.info(f"  [{market}/{category}] page {page + 1}")
-                listings = scrape_page(session, url, market, category, today_str)
-                if not listings:
-                    break
-                all_listings.extend(listings)
+            got = 0
+            for lo, hi in PRICE_BANDS:
+                label = f"{market}/{category} {lo}-{hi if hi else 'up'}"
+                try:
+                    items = fetch_band(session, mkt, category, lo, hi, today_str, seen)
+                except Exception as e:
+                    failures.append(f"{label}: {e}")
+                    log.error(f"  [{label}] request failed: {e}")
+                    continue
+                got += len(items)
+                all_listings.extend(items)
+                log.info(f"  [{label}] {len(items)} new")
                 time.sleep(REQUEST_DELAY)
-    return all_listings
+
+            log.info(f"  {market}/{category}: {got} kept")
+            if got == 0:
+                failures.append(f"{market}/{category}: zero listings across every price band")
+                log.error(f"  [{market}/{category}] returned nothing at all")
+
+    return all_listings, failures
 
 
 # ── Title similarity for repost detection ─────────────────────────────────
@@ -645,8 +738,10 @@ def compute_snapshots(today_str):
 
 # ── Main ──────────────────────────────────────────────────────────────────
 def main():
+    dry_run = "--dry-run" in sys.argv
     log.info("═" * 60)
-    log.info("SB + Ojai + Santa Maria Rental Scraper v3 — starting")
+    log.info("SB + Ojai + Santa Maria Rental Scraper v3 — starting"
+             + ("  [DRY RUN — no database writes]" if dry_run else ""))
 
     today_str = date.today().isoformat()
     log.info(f"Scrape date: {today_str}")
@@ -654,17 +749,34 @@ def main():
     session = requests.Session()
 
     # Scrape
-    all_listings = scrape_all(session, today_str)
+    all_listings, failures = scrape_all(session, today_str)
     from collections import Counter
     log.info(f"Total scraped: {len(all_listings)}")
     log.info(f"By market: {dict(Counter(l['market'] for l in all_listings))}")
     log.info(f"By category: {dict(Counter(l['category'] for l in all_listings))}")
 
-    # Upsert
-    upsert_listings(all_listings, today_str)
+    # A scrape that collected nothing must never look like a clean run. This is
+    # what let the job report success daily from 2026-06-24 while writing no data.
+    if not all_listings:
+        for f in failures:
+            log.error(f"  {f}")
+        raise SystemExit("Scraped 0 listings across all markets - aborting before "
+                         "any write, so snapshots are not poisoned with empty data.")
 
-    # Snapshot
-    compute_snapshots(today_str)
+    if dry_run:
+        log.info("Dry run: skipping upsert and snapshots.")
+    else:
+        # Upsert
+        upsert_listings(all_listings, today_str)
+
+        # Snapshot
+        compute_snapshots(today_str)
+
+    if failures:
+        for f in failures:
+            log.error(f"  {f}")
+        raise SystemExit(f"Completed with {len(failures)} market/category failure(s) - "
+                         "data written, but coverage is incomplete.")
 
     log.info("Done.")
     log.info("═" * 60)

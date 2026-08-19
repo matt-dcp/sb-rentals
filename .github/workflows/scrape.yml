@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 16 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Scrape and report counts without writing to Supabase'
+        type: boolean
+        default: false
 
 jobs:
   scrape:
@@ -25,7 +30,7 @@ jobs:
       - name: Run scraper
         env:
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python scraper.py
+        run: python scraper.py ${{ (inputs.dry_run && '--dry-run') || '' }}
 
       - name: Keep-alive (prevent 60-day cron disable)
         run: |
