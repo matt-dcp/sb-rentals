@@ -614,6 +614,28 @@ def detect_reposts(new_ids, by_id, today_str):
 
 
 # ── Daily snapshot computation ────────────────────────────────────────────
+def sb_select_all(query):
+    """GET every row matching a PostgREST query, paging past the server cap.
+
+    PostgREST enforces its own max-rows (1000 here) regardless of the limit we
+    ask for, so a single request with limit=10000 silently returns the first
+    1000 and nothing signals the truncation.
+    """
+    PAGE, rows, offset = 1000, [], 0
+    while True:
+        url = f"{SUPABASE_URL}/rest/v1/listings?{query}&limit={PAGE}&offset={offset}"
+        req = urllib.request.Request(url, headers=SB_HEADERS)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            batch = json.loads(resp.read())
+        if not batch:
+            break
+        rows.extend(batch)
+        if len(batch) < PAGE:
+            break
+        offset += len(batch)
+    return rows
+
+
 def compute_snapshots(today_str):
     """
     Fetch all listings active today + removed since yesterday,
@@ -624,37 +646,18 @@ def compute_snapshots(today_str):
 
     log.info("Computing daily snapshots…")
 
+    SNAP_FILTER = ("select=market,category,bedrooms,price,first_seen,last_seen"
+                   "&category=neq.room_rental"
+                   "&price=gte.500&price=lte.20000")
+
     # Fetch active listings (last_seen = today)
-    active = []
-    offset = 0
-    while True:
-        url = (f"{SUPABASE_URL}/rest/v1/listings"
-               f"?select=market,category,bedrooms,price,first_seen,last_seen"
-               f"&last_seen=eq.{today_str}"
-               f"&category=neq.room_rental"
-               f"&price=gte.500&price=lte.20000"
-               f"&limit=10000&offset={offset}")
-        req = urllib.request.Request(url, headers=SB_HEADERS)
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            batch = json.loads(resp.read())
-        if not batch: break
-        active.extend(batch)
-        if len(batch) < 10000: break
-        offset += 10000
+    active = sb_select_all(f"{SNAP_FILTER}&last_seen=eq.{today_str}")
 
     # Fetch removed listings (last_seen = yesterday, meaning gone today)
-    removed = []
-    url = (f"{SUPABASE_URL}/rest/v1/listings"
-           f"?select=market,category,bedrooms,price,first_seen,last_seen"
-           f"&last_seen=eq.{yesterday}"
-           f"&category=neq.room_rental"
-           f"&price=gte.500&price=lte.20000"
-           f"&limit=10000")
-    req = urllib.request.Request(url, headers=SB_HEADERS)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            removed = json.loads(resp.read())
-    except:
+        removed = sb_select_all(f"{SNAP_FILTER}&last_seen=eq.{yesterday}")
+    except Exception as e:
+        log.warning(f"Removed-listing fetch failed: {e}")
         removed = []
 
     log.info(f"  Active today: {len(active)}, Removed: {len(removed)}")
