@@ -915,9 +915,12 @@ function initMap(){
   const mc=MAP_CENTERS[currentMarket];
   leafletMap=L.map('map').setView(mc.center,mc.zoom);
   markerLayer=L.layerGroup().addTo(leafletMap);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; OSM &copy; CARTO',subdomains:'abcd',maxZoom:19
+  // CARTO basemaps now require an API key; Esri Dark Gray Canvas is keyless
+  const esri='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+  L.tileLayer(esri+'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles &copy; Esri',maxZoom:16
   }).addTo(leafletMap);
+  L.tileLayer(esri+'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:16}).addTo(leafletMap);
   const s=document.createElement('style');
   s.textContent=`.dp .leaflet-popup-content-wrapper{background:#16181c;border:1px solid #2a2e36;border-radius:0;box-shadow:none;color:#e8ecf4}.dp .leaflet-popup-tip{background:#16181c}.dp .leaflet-popup-close-button{color:#7a8399!important}`;
   document.head.appendChild(s);
